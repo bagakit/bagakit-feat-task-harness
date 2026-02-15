@@ -1,9 +1,11 @@
 SKILL_NAME := bagakit-feat-task-harness
-CODEX_HOME ?= $(HOME)/.codex
-SKILL_DIR := $(CODEX_HOME)/skills/$(SKILL_NAME)
+BAGAKIT_HOME ?= $(HOME)/.bagakit
+SKILL_DIR := $(BAGAKIT_HOME)/skills/$(SKILL_NAME)
 PACKAGE := dist/$(SKILL_NAME).skill
+AGENT_CLI ?= bagakit-agent
+AGENT_FLAGS ?=
 
-.PHONY: install-skill package-skill clean test
+.PHONY: install-skill package-skill clean test agent-locale
 
 install-skill:
 	rm -rf "$(SKILL_DIR)"
@@ -24,7 +26,7 @@ test:
 clean:
 	rm -rf dist
 
-codex-locale:
-	@echo "CODEX_HOME=$(PWD)/.codex"
-	@echo "Running codex with CODEX_HOME=$(PWD)/.codex"
-	codex -m gpt-5.3-codex -c model_reasoning_effort="xhigh" -c model_reasoning_summary_format=experimental --search --dangerously-bypass-approvals-and-sandbox
+agent-locale:
+	@echo "BAGAKIT_HOME=$(PWD)/.bagakit"
+	@echo "Running $(AGENT_CLI) with BAGAKIT_HOME=$(PWD)/.bagakit"
+	$(AGENT_CLI) $(AGENT_FLAGS)

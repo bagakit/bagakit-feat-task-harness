@@ -21,7 +21,8 @@ This skill enforces:
 1) Generate reference-read report (strict gate)
 
 ```bash
-export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${CODEX_HOME:-$HOME/.codex}/skills/bagakit-feat-task-harness}"
+export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
+export BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills}"
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
 ```
 
@@ -108,7 +109,8 @@ Required trailers:
 ## Quality Gates
 
 - UI projects: require browser-verification evidence file (`ui-verification.md`) and optional commands.
-- Non-UI projects: run configured or auto-detected test command(s); at least one command must execute successfully.
+- Non-UI projects: run configured test command(s); at least one command must execute successfully.
+- Project-type auto mode is rule-driven via `gate.project_type_rules` in `.bagakit-ft/config.json`.
 
 Gate outcomes are written into task/state JSON and used by doctor thresholds.
 

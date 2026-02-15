@@ -24,6 +24,7 @@ TASK_ID_RE = re.compile(r"^T-\d{3}$")
 FEAT_STATUS = {"proposal", "ready", "in_progress", "blocked", "done", "archived"}
 TASK_STATUS = {"todo", "in_progress", "done", "blocked"}
 GATE_STATUS = {"pass", "fail"}
+UNRESOLVED_ENV_RE = re.compile(r"\$\{?[A-Za-z_][A-Za-z0-9_]*")
 
 
 def utc_now() -> str:
@@ -300,6 +301,13 @@ def manifest_path(skill_dir: Path, path_override: str | None) -> Path:
     return skill_dir / "references" / "required-reading-manifest.json"
 
 
+def resolve_manifest_location(raw: str) -> tuple[str, str | None]:
+    expanded = os.path.expanduser(os.path.expandvars(raw))
+    if UNRESOLVED_ENV_RE.search(expanded):
+        return expanded, "unresolved environment variable in location"
+    return expanded, None
+
+
 def compute_manifest_hash(path: Path) -> str:
     return sha256_file(path)
 
@@ -327,6 +335,7 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
         entry_id = str(entry.get("id", ""))
         entry_type = str(entry.get("type", ""))
         location = str(entry.get("location", ""))
+        resolved_location = location
         required = bool(entry.get("required", True))
         exists = False
         digest = ""
@@ -336,13 +345,18 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
             ok = False
             error = "invalid manifest entry"
         elif entry_type == "file":
-            p = Path(location)
-            if p.exists() and p.is_file():
-                exists = True
-                digest = sha256_file(p)
-            else:
+            resolved_location, resolve_error = resolve_manifest_location(location)
+            if resolve_error:
                 exists = False
-                error = "file not found"
+                error = resolve_error
+            else:
+                p = Path(resolved_location)
+                if p.exists() and p.is_file():
+                    exists = True
+                    digest = sha256_file(p)
+                else:
+                    exists = False
+                    error = "file not found"
         elif entry_type == "url":
             try:
                 with urllib.request.urlopen(location, timeout=20) as r:
@@ -361,6 +375,7 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
                 "id": entry_id,
                 "type": entry_type,
                 "location": location,
+                "resolved_location": resolved_location,
                 "required": required,
                 "exists": exists,
                 "sha256": digest,
@@ -769,23 +784,35 @@ def detect_project_type(root: Path, config: dict[str, Any]) -> str:
     if explicit in {"ui", "non_ui"}:
         return explicit
 
-    ui_markers = [
-        "vite.config.js",
-        "vite.config.ts",
-        "next.config.js",
-        "next.config.mjs",
-        "tailwind.config.js",
-        "tailwind.config.ts",
-    ]
-    ui_dirs = ["src/components", "components", "frontend", "web", "app", "pages"]
+    rules = gate_cfg.get("project_type_rules", {})
+    if isinstance(rules, dict):
+        ui_rules = rules.get("ui", {})
+        non_ui_rules = rules.get("non_ui", {})
+        default_type = str(rules.get("default", "non_ui"))
+        if default_type not in {"ui", "non_ui"}:
+            default_type = "non_ui"
 
-    if (root / "package.json").exists():
-        for marker in ui_markers:
-            if (root / marker).exists():
-                return "ui"
-        for d in ui_dirs:
-            if (root / d).exists():
-                return "ui"
+        def matches(rule_set: Any) -> bool:
+            if not isinstance(rule_set, dict):
+                return False
+            any_paths = rule_set.get("any_path_exists", [])
+            if isinstance(any_paths, list) and any_paths:
+                for rel in any_paths:
+                    if (root / str(rel)).exists():
+                        return True
+            all_paths = rule_set.get("all_paths_exist", [])
+            if isinstance(all_paths, list) and all_paths:
+                if all((root / str(rel)).exists() for rel in all_paths):
+                    return True
+            return False
+
+        if matches(ui_rules):
+            return "ui"
+        if matches(non_ui_rules):
+            return "non_ui"
+        return default_type
+
+    # Legacy compatibility fallback when no rules are configured.
     return "non_ui"
 
 

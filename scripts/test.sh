@@ -10,10 +10,32 @@ trap 'rm -rf "$tmp"' EXIT
 project="$tmp/project"
 mkdir -p "$project"
 
+export BAGAKIT_REFERENCE_SKILLS_HOME="$tmp/reference-skills"
+
+echo "[test] seed required references"
+python3 - <<PY
+import json
+import os
+from pathlib import Path
+
+manifest = Path(r"$skill_root") / "references" / "required-reading-manifest.json"
+data = json.loads(manifest.read_text(encoding="utf-8"))
+for entry in data.get("entries", []):
+    if entry.get("type") != "file":
+        continue
+    raw = str(entry.get("location", "")).strip()
+    if not raw:
+        continue
+    p = Path(os.path.expanduser(os.path.expandvars(raw)))
+    p.parent.mkdir(parents=True, exist_ok=True)
+    if not p.exists():
+        p.write_text("# seeded by test\n", encoding="utf-8")
+PY
+
 pushd "$project" >/dev/null
 git init -q
-git config user.email "codex@example.com"
-git config user.name "Codex"
+git config user.email "bagakit-bot@example.com"
+git config user.name "Bagakit Bot"
 echo "hello" > README.md
 git add README.md
 git commit -q -m "init"

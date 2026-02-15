@@ -11,15 +11,16 @@ A Bagakit skill implementing feat/task long-running orchestration with:
 ## Install skill locally
 
 ```bash
-make install-skill CODEX_HOME=~/.codex
+make install-skill BAGAKIT_HOME=~/.bagakit
 ```
 
-Restart Codex after installation.
+Restart Bagakit Agent after installation.
 
 ## Initialize in target project
 
 ```bash
-export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${CODEX_HOME:-$HOME/.codex}/skills/bagakit-feat-task-harness}"
+export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
+export BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills}"
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/apply-ft-harness.sh" --root .
 ```
@@ -42,6 +43,8 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_feat_close.sh" --root . --feat <feat-id>
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/validate-ft-harness.sh" --root .
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_doctor.sh" --root .
 ```
+
+`project_type=auto` uses rule-driven detection from `.bagakit-ft/config.json` (`gate.project_type_rules`).
 
 ## OpenSpec Compatibility Helpers
 
