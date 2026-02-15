@@ -1,0 +1,6 @@
+dist/
+
+.worktrees
+.agency
+.gemini-* 
+.codex

@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "description": "Required references that must be read before strict harness operations.",
+  "entries": [
+    {
+      "id": "openspec-onboard-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-onboard/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-new-change-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-new-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-ff-change-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-ff-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-continue-change-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-continue-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-apply-change-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-apply-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-verify-change-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-verify-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-archive-change-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-archive-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-bulk-archive-change-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-bulk-archive-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-sync-specs-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-sync-specs/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-explore-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/openspec-explore/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "git-worktree-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/git-worktree/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "git-worktree-manager-script",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/git-worktree/scripts/worktree-manager.sh",
+      "required": true
+    },
+    {
+      "id": "using-git-worktrees-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/using-git-worktrees/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "bagakit-living-docs-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/bagakit-living-docs/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "skill-creator-skill",
+      "type": "file",
+      "location": "/Users/bytedance/proj/priv/khgame/GameDevStory/.codex/skills/.system/skill-creator/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-workflows-doc",
+      "type": "url",
+      "location": "https://raw.githubusercontent.com/Fission-AI/OpenSpec/main/docs/workflows.md",
+      "required": true
+    },
+    {
+      "id": "openspec-commands-doc",
+      "type": "url",
+      "location": "https://raw.githubusercontent.com/Fission-AI/OpenSpec/main/docs/commands.md",
+      "required": true
+    },
+    {
+      "id": "openspec-concepts-doc",
+      "type": "url",
+      "location": "https://raw.githubusercontent.com/Fission-AI/OpenSpec/main/docs/concepts.md",
+      "required": true
+    }
+  ]
+}

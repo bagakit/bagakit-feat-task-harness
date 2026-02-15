@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feat_id": "<feat-id>",
+  "updated_at": "1970-01-01T00:00:00Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Implement first scoped change for this feat",
+      "status": "todo",
+      "summary": "Replace this placeholder with actual task detail.",
+      "gate_result": null,
+      "last_gate_at": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "started_at": null,
+      "finished_at": null,
+      "updated_at": "1970-01-01T00:00:00Z",
+      "notes": []
+    }
+  ]
+}
