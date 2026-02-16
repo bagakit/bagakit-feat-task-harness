@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import an OpenSpec change into .bagakit-ft feat format."""
+"""Import an OpenSpec change into .bagakit/ft-harness feat format."""
 
 from __future__ import annotations
 

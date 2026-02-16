@@ -25,6 +25,7 @@ FEAT_STATUS = {"proposal", "ready", "in_progress", "blocked", "done", "archived"
 TASK_STATUS = {"todo", "in_progress", "done", "blocked"}
 GATE_STATUS = {"pass", "fail"}
 UNRESOLVED_ENV_RE = re.compile(r"\$\{?[A-Za-z_][A-Za-z0-9_]*")
+REFERENCE_SKILLS_ENV = "BAGAKIT_REFERENCE_SKILLS_HOME"
 
 
 def utc_now() -> str:
@@ -129,7 +130,7 @@ class HarnessPaths:
 
     @property
     def harness_dir(self) -> Path:
-        return self.root / ".bagakit-ft"
+        return self.root / ".bagakit" / "ft-harness"
 
     @property
     def feats_dir(self) -> Path:
@@ -308,6 +309,34 @@ def resolve_manifest_location(raw: str) -> tuple[str, str | None]:
     return expanded, None
 
 
+def default_reference_skills_home() -> Path | None:
+    env_raw = os.environ.get(REFERENCE_SKILLS_ENV, "").strip()
+    if env_raw:
+        return Path(os.path.expanduser(os.path.expandvars(env_raw)))
+
+    home = Path.home()
+    candidates = [
+        Path(os.path.expanduser(os.path.expandvars(os.environ.get("BAGAKIT_HOME", "")))) / "skills"
+        if os.environ.get("BAGAKIT_HOME")
+        else None,
+        home / ".bagakit" / "skills",
+        home / ".claude" / "skills",
+        home / ".codex" / "skills",
+    ]
+    for c in candidates:
+        if c and c.exists() and c.is_dir():
+            return c
+    return None
+
+
+def ensure_reference_skills_home() -> Path | None:
+    p = default_reference_skills_home()
+    if p is None:
+        return None
+    os.environ.setdefault(REFERENCE_SKILLS_ENV, str(p))
+    return p
+
+
 def compute_manifest_hash(path: Path) -> str:
     return sha256_file(path)
 
@@ -317,6 +346,7 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
     paths = HarnessPaths(root)
     skill_dir = Path(args.skill_dir).resolve()
     mpath = manifest_path(skill_dir, args.manifest)
+    detected_ref_home = ensure_reference_skills_home()
 
     if not mpath.exists():
         eprint(f"error: manifest not found: {mpath}")
@@ -438,6 +468,13 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
 
     print(f"write: {paths.ref_report_json}")
     print(f"write: {paths.ref_report_md}")
+    if detected_ref_home is not None:
+        print(f"info: {REFERENCE_SKILLS_ENV}={detected_ref_home}")
+    else:
+        eprint(
+            "warn: BAGAKIT_REFERENCE_SKILLS_HOME not found automatically; "
+            "file-based manifest entries may fail if required skills are missing"
+        )
     if not ok:
         eprint("error: reference read gate failed (missing required entries)")
         return 1
@@ -446,6 +483,7 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
 
 
 def check_ref_report(paths: HarnessPaths, skill_dir: Path, manifest_override: str | None = None) -> list[str]:
+    ensure_reference_skills_home()
     issues: list[str] = []
     mpath = manifest_path(skill_dir, manifest_override)
     if not mpath.exists():
@@ -483,6 +521,11 @@ def check_ref_report(paths: HarnessPaths, skill_dir: Path, manifest_override: st
     ]
     if missing_required:
         issues.append(f"missing required references: {', '.join(str(i) for i in missing_required)}")
+        issues.append(
+            "hint: ensure required skills are installed and "
+            "set BAGAKIT_REFERENCE_SKILLS_HOME to the correct skills directory "
+            "(for one-shot shell calls, set it inline with the command)"
+        )
 
     return issues
 
@@ -521,9 +564,10 @@ def cmd_apply(args: argparse.Namespace) -> int:
     copy_template_if_missing(skill_dir, "harness-config-template.json", paths.config_file)
 
     if not (paths.harness_dir / "README.md").exists():
+        runtime_rel = str(paths.harness_dir.relative_to(root))
         write_text(
             paths.harness_dir / "README.md",
-            "# .bagakit-ft\n\nJSON SSOT feat/task harness runtime data.\n",
+            f"# {runtime_rel}\n\nJSON SSOT feat/task harness runtime data.\n",
         )
         print(f"write: {paths.harness_dir / 'README.md'}")
 
@@ -900,7 +944,7 @@ def cmd_task_gate(args: argparse.Namespace) -> int:
         if not commands:
             failed = True
             fail_reasons.append(
-                "no non-ui gate command available; set gate.non_ui_commands in .bagakit-ft/config.json"
+                f"no non-ui gate command available; set gate.non_ui_commands in {paths.config_file.relative_to(root)}"
             )
         else:
             for cmd in commands:

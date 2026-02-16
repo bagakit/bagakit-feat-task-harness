@@ -61,7 +61,7 @@ echo "[test] configure non-ui gate command"
 python3 - <<PY
 import json
 from pathlib import Path
-p = Path(r"$project") / ".bagakit-ft" / "config.json"
+p = Path(r"$project") / ".bagakit" / "ft-harness" / "config.json"
 data = json.loads(p.read_text())
 data["gate"]["project_type"] = "non_ui"
 data["gate"]["non_ui_commands"] = ["bash -lc 'true'"]

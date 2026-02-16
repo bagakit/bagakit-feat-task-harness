@@ -20,9 +20,17 @@ Restart Bagakit Agent after installation.
 
 ```bash
 export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
-export BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills}"
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/apply-ft-harness.sh" --root .
+```
+
+`ref_read_gate.sh` auto-detects `BAGAKIT_REFERENCE_SKILLS_HOME` from common locations (`$BAGAKIT_HOME/skills`, `$HOME/.bagakit/skills`, `$HOME/.claude/skills`, `$HOME/.codex/skills`).
+
+For one-shot shell invocations, pass override inline:
+
+```bash
+BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
+  bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
 ```
 
 ## Core loop
@@ -44,7 +52,7 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/validate-ft-harness.sh" --root .
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_doctor.sh" --root .
 ```
 
-`project_type=auto` uses rule-driven detection from `.bagakit-ft/config.json` (`gate.project_type_rules`).
+`project_type=auto` uses rule-driven detection from `.bagakit/ft-harness/config.json` (`gate.project_type_rules`).
 
 ## OpenSpec Compatibility Helpers
 

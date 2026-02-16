@@ -22,8 +22,21 @@ This skill enforces:
 
 ```bash
 export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
-export BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills}"
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
+```
+
+`ref_read_gate.sh` auto-detects `BAGAKIT_REFERENCE_SKILLS_HOME` from:
+- `$BAGAKIT_REFERENCE_SKILLS_HOME` (if set)
+- `${BAGAKIT_HOME}/skills`
+- `$HOME/.bagakit/skills`
+- `$HOME/.claude/skills`
+- `$HOME/.codex/skills`
+
+For single-command shells, set override inline:
+
+```bash
+BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
+  bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
 ```
 
 2) Apply harness files into project
@@ -80,10 +93,10 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_doctor.sh" --root .
 
 ## JSON SSOT Model
 
-Runtime state is stored under `.bagakit-ft/`:
-- `.bagakit-ft/index/feats.json`
-- `.bagakit-ft/feats/<feat-id>/state.json`
-- `.bagakit-ft/feats/<feat-id>/tasks.json`
+Runtime state is stored under `.bagakit/ft-harness/`:
+- `.bagakit/ft-harness/index/feats.json`
+- `.bagakit/ft-harness/feats/<feat-id>/state.json`
+- `.bagakit/ft-harness/feats/<feat-id>/tasks.json`
 
 Markdown files (`proposal.md`, `tasks.md`, `spec-deltas/*.md`) are human-readable views.
 
@@ -110,7 +123,7 @@ Required trailers:
 
 - UI projects: require browser-verification evidence file (`ui-verification.md`) and optional commands.
 - Non-UI projects: run configured test command(s); at least one command must execute successfully.
-- Project-type auto mode is rule-driven via `gate.project_type_rules` in `.bagakit-ft/config.json`.
+- Project-type auto mode is rule-driven via `gate.project_type_rules` in `.bagakit/ft-harness/config.json`.
 
 Gate outcomes are written into task/state JSON and used by doctor thresholds.
 

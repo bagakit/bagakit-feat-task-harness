@@ -6,7 +6,7 @@ tags:
   - feat
   - gotcha
 sources:
-  - .bagakit-ft/feats/<feat-id>/summary.md
+  - .bagakit/ft-harness/feats/<feat-id>/summary.md
 created: <created-at>
 ---
 
