@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "include": [
+    "SKILL.md",
+    "README.md",
+    "agents",
+    "references",
+    "scripts"
+  ]
+}
+

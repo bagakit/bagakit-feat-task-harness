@@ -21,7 +21,7 @@ package-skill: clean
 	@echo "packaged: $(PACKAGE)"
 
 test:
-	./scripts/test.sh
+	./scripts_dev/test.sh
 
 clean:
 	rm -rf dist

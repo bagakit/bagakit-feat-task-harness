@@ -1,6 +1,6 @@
 ---
 name: bagakit-feat-task-harness
-description: Build and run a feat/task long-running harness with OpenSpec-style change semantics, per-feat git worktree isolation, JSON SSOT state transitions, strict task-level commit protocol, and optional Bagakit living-doc memory sync. Use when work spans multiple sessions, requires auditable small commits, or needs deterministic orchestration without an SDK runner.
+description: Build and run a feat/task long-running harness with compatibility for OpenSpec-style change semantics (optional), per-feat git worktree isolation, JSON SSOT state transitions, strict task-level commit protocol, and optional Bagakit living-doc memory sync. Use when work spans multiple sessions, requires auditable small commits, or needs deterministic orchestration without an SDK runner.
 ---
 
 # Bagakit Feat Task Harness
@@ -24,6 +24,19 @@ This skill enforces:
 export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
 ```
+
+Default manifest is Bagakit-only:
+- `references/required-reading-manifest.json`
+
+For OpenSpec workflows (optional compatibility), run strict gate with the OpenSpec manifest:
+
+```bash
+BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
+  bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root . \
+  --manifest "$BAGAKIT_FT_SKILL_DIR/references/required-reading-manifest-openspec.json"
+```
+
+The OpenSpec manifest checks local skill files only.
 
 `ref_read_gate.sh` auto-detects `BAGAKIT_REFERENCE_SKILLS_HOME` from:
 - `$BAGAKIT_REFERENCE_SKILLS_HOME` (if set)

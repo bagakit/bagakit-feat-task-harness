@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "description": "Optional strict ref-read manifest that enables OpenSpec compatibility through local skills. Use only when actively running OpenSpec workflows.",
+  "entries": [
+    {
+      "id": "openspec-onboard-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-onboard/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-new-change-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-new-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-ff-change-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-ff-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-continue-change-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-continue-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-apply-change-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-apply-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-verify-change-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-verify-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-archive-change-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-archive-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-bulk-archive-change-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-bulk-archive-change/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-sync-specs-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-sync-specs/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "openspec-explore-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/openspec-explore/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "git-worktree-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/git-worktree/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "git-worktree-manager-script",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/git-worktree/scripts/worktree-manager.sh",
+      "required": true
+    },
+    {
+      "id": "using-git-worktrees-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/using-git-worktrees/SKILL.md",
+      "required": true
+    },
+    {
+      "id": "bagakit-living-docs-skill",
+      "type": "file",
+      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/bagakit-living-docs/SKILL.md",
+      "required": true
+    }
+  ]
+}

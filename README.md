@@ -33,6 +33,21 @@ BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
   bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
 ```
 
+### Optional ref-read manifests
+
+- Default strict gate uses:
+  - `references/required-reading-manifest.json`
+- For OpenSpec workflows, pass the OpenSpec manifest explicitly:
+  - `references/required-reading-manifest-openspec.json` (local-skill checks only; no required remote URL fetch)
+
+```bash
+BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
+  bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root . \
+  --manifest "$BAGAKIT_FT_SKILL_DIR/references/required-reading-manifest-openspec.json"
+```
+
+Then pass the same `--manifest ...openspec.json` to `apply-ft-harness.sh` / `ft_feat_new.sh` when running in `--strict` mode.
+
 ## Core loop
 
 ```bash
@@ -55,6 +70,8 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_doctor.sh" --root .
 `project_type=auto` uses rule-driven detection from `.bagakit/ft-harness/config.json` (`gate.project_type_rules`).
 
 ## OpenSpec Compatibility Helpers
+
+These helpers are optional. The harness does not require OpenSpec unless you opt in via a manifest.
 
 ```bash
 # Import an existing OpenSpec change into feat/task harness
