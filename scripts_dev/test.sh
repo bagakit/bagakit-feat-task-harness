@@ -4,6 +4,7 @@ set -euo pipefail
 dev_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_root="$(cd "${dev_script_dir}/.." && pwd)"
 runtime_scripts_dir="${skill_root}/scripts"
+harness_cli="${runtime_scripts_dir}/feat_task_harness.sh"
 
 tmp="$(mktemp -d -t bagakit-ft-harness.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
@@ -93,10 +94,10 @@ git commit -q -m "init"
 popd >/dev/null
 
 echo "[test] ref read gate"
-bash "$runtime_scripts_dir/ref_read_gate.sh" --root "$project"
+bash "$harness_cli" check-reference-readiness --root "$project"
 
 echo "[test] openspec manifest should fail before seeding optional refs"
-if bash "$runtime_scripts_dir/ref_read_gate.sh" --root "$project" --manifest "$skill_root/references/required-reading-manifest-openspec.json" >/dev/null 2>&1; then
+if bash "$harness_cli" check-reference-readiness --root "$project" --manifest "$skill_root/references/required-reading-manifest-openspec.json" >/dev/null 2>&1; then
   echo "[test] expected openspec manifest gate to fail before seeding optional refs" >&2
   exit 1
 fi
@@ -122,21 +123,22 @@ for entry in data.get("entries", []):
 PY
 
 echo "[test] openspec manifest gate"
-bash "$runtime_scripts_dir/ref_read_gate.sh" --root "$project" --manifest "$skill_root/references/required-reading-manifest-openspec.json"
+bash "$harness_cli" check-reference-readiness --root "$project" --manifest "$skill_root/references/required-reading-manifest-openspec.json"
 
 echo "[test] re-generate default ref-read report for harness"
-bash "$runtime_scripts_dir/ref_read_gate.sh" --root "$project"
+bash "$harness_cli" check-reference-readiness --root "$project"
 
 echo "[test] apply harness"
-bash "$runtime_scripts_dir/apply-ft-harness.sh" --root "$project"
+bash "$harness_cli" initialize-harness --root "$project"
 
 echo "[test] create feat"
-feat_out="$(bash "$runtime_scripts_dir/ft_feat_new.sh" --root "$project" --title "Demo Feat" --slug "demo-feat" --goal "Validate full loop")"
+feat_out="$(bash "$harness_cli" create-feat --root "$project" --title "Demo Feat" --slug "demo-feat" --goal "Validate full loop")"
 echo "$feat_out"
 feat_id="$(printf '%s\n' "$feat_out" | awk -F': ' '/^feat_id:/ {print $2}')"
+worktree_path="$(printf '%s\n' "$feat_out" | awk -F': ' '/^worktree:/ {print $2}')"
 
-if [[ -z "$feat_id" ]]; then
-  echo "[test] failed to parse feat_id" >&2
+if [[ -z "$feat_id" || -z "$worktree_path" ]]; then
+  echo "[test] failed to parse feat_id/worktree" >&2
   exit 1
 fi
 
@@ -152,14 +154,14 @@ p.write_text(json.dumps(data, indent=2) + "\n")
 PY
 
 echo "[test] task loop"
-bash "$runtime_scripts_dir/ft_task_start.sh" --root "$project" --feat "$feat_id" --task T-001
-bash "$runtime_scripts_dir/ft_task_gate.sh" --root "$project" --feat "$feat_id" --task T-001
+bash "$harness_cli" start-task --root "$project" --feat "$feat_id" --task T-001
+bash "$harness_cli" run-task-gate --root "$project" --feat "$feat_id" --task T-001
 
-# create code change
-printf '\nupdate\n' >> "$project/README.md"
+# create code change in feat worktree branch
+printf '\nupdate\n' >> "$worktree_path/README.md"
 
 echo "[test] generate commit message"
-commit_out="$(bash "$runtime_scripts_dir/ft_task_commit.sh" --root "$project" --feat "$feat_id" --task T-001 --summary "Implement T-001")"
+commit_out="$(bash "$harness_cli" prepare-task-commit --root "$project" --feat "$feat_id" --task T-001 --summary "Implement T-001")"
 echo "$commit_out"
 msg_file="$(printf '%s\n' "$commit_out" | awk -F': ' '/^message_file:/ {print $2}')"
 
@@ -168,19 +170,43 @@ if [[ -z "$msg_file" ]]; then
   exit 1
 fi
 
-pushd "$project" >/dev/null
+pushd "$worktree_path" >/dev/null
 git add -A
 git commit -q -F "$msg_file"
 popd >/dev/null
 
-bash "$runtime_scripts_dir/ft_task_finish.sh" --root "$project" --feat "$feat_id" --task T-001 --result done
-bash "$runtime_scripts_dir/ft_feat_close.sh" --root "$project" --feat "$feat_id"
+bash "$harness_cli" finish-task --root "$project" --feat "$feat_id" --task T-001 --result done
+
+echo "[test] merge feat branch into base branch"
+pushd "$project" >/dev/null
+git merge --no-ff -m "merge ${feat_id}" "feat/${feat_id}"
+popd >/dev/null
+
+echo "[test] archive feat + cleanup worktree"
+bash "$harness_cli" archive-feat --root "$project" --feat "$feat_id"
+
+if [[ -d "$project/.bagakit/ft-harness/feats/$feat_id" ]]; then
+  echo "[test] active feat directory still exists after archive" >&2
+  exit 1
+fi
+if [[ ! -d "$project/.bagakit/ft-harness/feats-archived/$feat_id" ]]; then
+  echo "[test] archived feat directory missing" >&2
+  exit 1
+fi
+if [[ -d "$worktree_path" ]]; then
+  echo "[test] worktree directory still exists after archive" >&2
+  exit 1
+fi
+if git -C "$project" show-ref --verify --quiet "refs/heads/feat/$feat_id"; then
+  echo "[test] feat branch still exists after archive" >&2
+  exit 1
+fi
 
 echo "[test] validate + doctor"
-bash "$runtime_scripts_dir/validate-ft-harness.sh" --root "$project"
-bash "$runtime_scripts_dir/ft_doctor.sh" --root "$project"
+bash "$harness_cli" validate-harness --root "$project"
+bash "$harness_cli" diagnose-harness --root "$project"
 
 echo "[test] query"
-python3 "$runtime_scripts_dir/ft_query.py" --root "$project" list >/dev/null
+bash "$harness_cli" list-feats --root "$project" >/dev/null
 
 echo "[test] pass: $skill_root"

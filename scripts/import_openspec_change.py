@@ -4,18 +4,18 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 from pathlib import Path
 
-from ft_core import (
+from feat_task_harness import (
     FEAT_ID_RE,
     HarnessPaths,
-    load_index,
+    ensure_git_repo,
+    ensure_worktrees_ignored,
+    pick_base_branch,
+    run_cmd,
     save_feat,
-    save_index,
     slugify,
-    sync_tasks_markdown,
     utc_day,
     utc_now,
 )
@@ -83,8 +83,11 @@ def main() -> int:
     change_dir = root / "openspec" / "changes" / args.change
     if not change_dir.exists():
         raise SystemExit(f"error: change not found: {change_dir}")
+    ensure_git_repo(root)
     if not paths.harness_dir.exists():
-        raise SystemExit("error: harness missing. run apply-ft-harness.sh first")
+        raise SystemExit(
+            "error: harness missing. run feat_task_harness.sh initialize-harness first"
+        )
 
     if args.feat_id:
         feat_id = args.feat_id
@@ -94,8 +97,32 @@ def main() -> int:
         raise SystemExit(f"error: invalid feat-id: {feat_id}")
 
     feat_dir = paths.feat_dir(feat_id)
-    if feat_dir.exists():
+    if feat_dir.exists() or paths.feat_dir(feat_id, status="archived").exists():
         raise SystemExit(f"error: feat already exists: {feat_id}")
+
+    branch = f"feat/{feat_id}"
+    wt_name = f"wt-{feat_id}"
+    wt_rel = Path(".worktrees") / wt_name
+    wt_abs = root / wt_rel
+    base_ref = pick_base_branch(root)
+
+    ensure_worktrees_ignored(root)
+    (root / ".worktrees").mkdir(parents=True, exist_ok=True)
+    cp = run_cmd(
+        [
+            "git",
+            "-C",
+            str(root),
+            "worktree",
+            "add",
+            str(wt_abs),
+            "-b",
+            branch,
+            base_ref,
+        ]
+    )
+    if cp.returncode != 0:
+        raise SystemExit(cp.stderr.strip() or cp.stdout.strip() or "error: failed to create worktree")
 
     feat_dir.mkdir(parents=True, exist_ok=False)
     (feat_dir / "spec-deltas").mkdir(parents=True, exist_ok=True)
@@ -128,9 +155,10 @@ def main() -> int:
         "slug": slugify(args.change),
         "goal": f"Imported from openspec/changes/{args.change}",
         "status": "ready",
-        "branch": f"feat/{feat_id}",
-        "worktree_name": f"wt-{feat_id}",
-        "worktree_path": f".worktrees/wt-{feat_id}",
+        "base_ref": base_ref,
+        "branch": branch,
+        "worktree_name": wt_name,
+        "worktree_path": str(wt_rel),
         "created_at": utc_now(),
         "updated_at": utc_now(),
         "current_task_id": None,

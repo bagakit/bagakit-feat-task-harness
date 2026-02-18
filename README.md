@@ -1,12 +1,13 @@
 # bagakit-feat-task-harness
 
-A Bagakit skill implementing feat/task long-running orchestration with:
+A Bagakit skill for multi-session feat/task orchestration with:
 
-- OpenSpec-style change semantics
 - one worktree per feat (`.worktrees/`)
 - JSON SSOT state machine
 - task-level structured commit protocol
-- optional living-docs memory sync
+- physical archive (`feats-archived/`) on feat close
+- optional OpenSpec import/export helpers
+- optional living-doc memory sync
 
 ## Install skill locally
 
@@ -20,65 +21,78 @@ Restart Bagakit Agent after installation.
 
 ```bash
 export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/apply-ft-harness.sh" --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" check-reference-readiness --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" initialize-harness --root .
 ```
 
-`ref_read_gate.sh` auto-detects `BAGAKIT_REFERENCE_SKILLS_HOME` from common locations (`$BAGAKIT_HOME/skills`, `$HOME/.bagakit/skills`, `$HOME/.claude/skills`, `$HOME/.codex/skills`).
+`check-reference-readiness` auto-detects `BAGAKIT_REFERENCE_SKILLS_HOME` from:
+- `$BAGAKIT_REFERENCE_SKILLS_HOME` (if set)
+- `${BAGAKIT_HOME}/skills`
+- `$HOME/.bagakit/skills`
 
 For one-shot shell invocations, pass override inline:
 
 ```bash
 BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
-  bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root .
+  bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" check-reference-readiness --root .
 ```
 
-### Optional ref-read manifests
+## Optional ref-read manifests
 
-- Default strict gate uses:
-  - `references/required-reading-manifest.json`
-- For OpenSpec workflows, pass the OpenSpec manifest explicitly:
-  - `references/required-reading-manifest-openspec.json` (local-skill checks only; no required remote URL fetch)
+- Default strict gate: `references/required-reading-manifest.json`
+- Optional OpenSpec profile: `references/required-reading-manifest-openspec.json`
 
 ```bash
 BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
-  bash "$BAGAKIT_FT_SKILL_DIR/scripts/ref_read_gate.sh" --root . \
+  bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" check-reference-readiness --root . \
   --manifest "$BAGAKIT_FT_SKILL_DIR/references/required-reading-manifest-openspec.json"
 ```
 
-Then pass the same `--manifest ...openspec.json` to `apply-ft-harness.sh` / `ft_feat_new.sh` when running in `--strict` mode.
+When `--strict` is enabled, pass the same manifest to `initialize-harness` / `create-feat`.
 
 ## Core loop
 
 ```bash
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_feat_new.sh" --root . --title "Add feature" --slug "add-feature" --goal "Deliver X"
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_task_start.sh" --root . --feat <feat-id> --task T-001
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_task_gate.sh" --root . --feat <feat-id> --task T-001
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_task_commit.sh" --root . --feat <feat-id> --task T-001 --summary "Implement T-001"
+# Create feat + worktree
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" create-feat --root . --title "Add feature" --slug "add-feature" --goal "Deliver X"
+
+# Task execution
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" start-task --root . --feat <feat-id> --task T-001
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" run-task-gate --root . --feat <feat-id> --task T-001
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" prepare-task-commit --root . --feat <feat-id> --task T-001 --summary "Implement T-001"
 # run git commit with generated message
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_task_finish.sh" --root . --feat <feat-id> --task T-001 --result done
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_feat_close.sh" --root . --feat <feat-id>
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" finish-task --root . --feat <feat-id> --task T-001 --result done
 ```
 
-## Validate
+## Archive feat (finalize)
 
 ```bash
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/validate-ft-harness.sh" --root .
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/ft_doctor.sh" --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" archive-feat --root . --feat <feat-id>
 ```
 
-`project_type=auto` uses rule-driven detection from `.bagakit/ft-harness/config.json` (`gate.project_type_rules`).
+`archive-feat` performs final-state archive actions:
+- set status to `archived`
+- move `.bagakit/ft-harness/feats/<feat-id>` -> `.bagakit/ft-harness/feats-archived/<feat-id>`
+- remove feat worktree directory
+- delete feat branch when merged into base branch
 
-## OpenSpec Compatibility Helpers
+Guardrails:
+- if feat status is `done`, the feat branch must already be merged into base branch
+- worktree must be clean (no uncommitted changes)
 
-These helpers are optional. The harness does not require OpenSpec unless you opt in via a manifest.
+## Validate / diagnose / query
 
 ```bash
-# Import an existing OpenSpec change into feat/task harness
-python3 "$BAGAKIT_FT_SKILL_DIR/scripts/ft_import_openspec.py" --root . --change <change-name>
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" validate-harness --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" diagnose-harness --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" list-feats --root .
+```
 
-# Export a feat back into openspec/changes/
-python3 "$BAGAKIT_FT_SKILL_DIR/scripts/ft_export_openspec.py" --root . --feat <feat-id>
+## OpenSpec helpers (optional)
+
+```bash
+python3 "$BAGAKIT_FT_SKILL_DIR/scripts/import_openspec_change.py" --root . --change <change-name>
+python3 "$BAGAKIT_FT_SKILL_DIR/scripts/export_feat_to_openspec.py" --root . --feat <feat-id>
 ```
 
 ## Package

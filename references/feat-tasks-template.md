@@ -7,4 +7,4 @@ This markdown file is a human-readable view. JSON SSOT lives in `tasks.json`.
 
 ## Notes
 - Keep one `in_progress` task at a time.
-- Use `ft_task_gate.sh` before commit.
+- Use `feat_task_harness.sh run-task-gate` before commit.

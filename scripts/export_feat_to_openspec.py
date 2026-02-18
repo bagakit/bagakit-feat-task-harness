@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ft_core import HarnessPaths, load_feat, slugify, utc_now
+from feat_task_harness import HarnessPaths, load_feat, slugify, utc_now
 
 
 def main() -> int:
@@ -20,9 +20,12 @@ def main() -> int:
     root = Path(args.root).resolve()
     paths = HarnessPaths(root)
     if not paths.harness_dir.exists():
-        raise SystemExit("error: harness missing. run apply-ft-harness.sh first")
+        raise SystemExit(
+            "error: harness missing. run feat_task_harness.sh initialize-harness first"
+        )
 
     state, tasks = load_feat(paths, args.feat)
+    feat_dir = paths.feat_dir(args.feat, status=str(state.get("status") or ""))
     change_name = args.change_name.strip() or slugify(args.feat)
     change_dir = root / "openspec" / "changes" / change_name
 
@@ -32,7 +35,7 @@ def main() -> int:
     (change_dir / "specs").mkdir(parents=True, exist_ok=True)
 
     # proposal
-    proposal_src = paths.feat_dir(args.feat) / "proposal.md"
+    proposal_src = feat_dir / "proposal.md"
     proposal_dst = change_dir / "proposal.md"
     if proposal_src.exists():
         proposal_dst.write_text(proposal_src.read_text(encoding="utf-8"), encoding="utf-8")
@@ -49,7 +52,7 @@ def main() -> int:
     (change_dir / "tasks.md").write_text("\n".join(lines), encoding="utf-8")
 
     # spec-deltas -> specs/<cap>/spec.md
-    spec_delta_dir = paths.feat_dir(args.feat) / "spec-deltas"
+    spec_delta_dir = feat_dir / "spec-deltas"
     if spec_delta_dir.exists():
         for src in spec_delta_dir.glob("*.md"):
             cap = slugify(src.stem)
