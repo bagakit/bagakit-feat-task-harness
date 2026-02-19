@@ -197,6 +197,10 @@ if [[ -d "$worktree_path" ]]; then
   echo "[test] worktree directory still exists after archive" >&2
   exit 1
 fi
+if git -C "$project" worktree list --porcelain | grep -q "worktree $worktree_path"; then
+  echo "[test] worktree registry still contains archived worktree path" >&2
+  exit 1
+fi
 if git -C "$project" show-ref --verify --quiet "refs/heads/feat/$feat_id"; then
   echo "[test] feat branch still exists after archive" >&2
   exit 1

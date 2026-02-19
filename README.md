@@ -73,12 +73,13 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" archive-feat --root . 
 `archive-feat` performs final-state archive actions:
 - set status to `archived`
 - move `.bagakit/ft-harness/feats/<feat-id>` -> `.bagakit/ft-harness/feats-archived/<feat-id>`
-- remove feat worktree directory
+- remove feat worktree directory + `git worktree prune`
 - delete feat branch when merged into base branch
 
 Guardrails:
 - if feat status is `done`, the feat branch must already be merged into base branch
 - worktree must be clean (no uncommitted changes)
+- archive fails if stale worktree registration still exists after cleanup
 
 ## Validate / diagnose / query
 

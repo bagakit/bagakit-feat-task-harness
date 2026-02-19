@@ -1280,6 +1280,7 @@ def render_summary(state: dict[str, Any], tasks: dict[str, Any]) -> str:
             "## Archive Cleanup",
             f"- Branch Merged: {cleanup.get('branch_merged', '')}",
             f"- Worktree Removed: {cleanup.get('worktree_removed', '')}",
+            f"- Worktree Pruned: {cleanup.get('worktree_pruned', '')}",
             f"- Branch Deleted: {cleanup.get('branch_deleted', '')}",
             f"- Cleanup Note: {cleanup.get('note', '')}",
             "",
@@ -1325,6 +1326,22 @@ def git_branch_merged_into(root: Path, branch: str, base_ref: str) -> bool:
     return cp.returncode == 0
 
 
+def git_worktree_paths(root: Path) -> set[Path]:
+    cp = run_cmd(["git", "-C", str(root), "worktree", "list", "--porcelain"])
+    if cp.returncode != 0:
+        return set()
+    out: set[Path] = set()
+    for raw in cp.stdout.splitlines():
+        line = raw.strip()
+        if not line.startswith("worktree "):
+            continue
+        path = line[len("worktree ") :].strip()
+        if not path:
+            continue
+        out.add(Path(path).resolve())
+    return out
+
+
 def cmd_feat_archive(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     skill_dir = Path(args.skill_dir).resolve()
@@ -1368,6 +1385,7 @@ def cmd_feat_archive(args: argparse.Namespace) -> int:
 
     # Remove worktree first (branch deletion is blocked while checked out).
     worktree_removed = False
+    worktree_pruned = False
     if wt_abs is not None and wt_abs.exists():
         cp = run_cmd(["git", "-C", str(root), "worktree", "remove", str(wt_abs)])
         if cp.returncode != 0:
@@ -1375,6 +1393,16 @@ def cmd_feat_archive(args: argparse.Namespace) -> int:
             return 1
         worktree_removed = True
         print(f"ok: worktree removed {wt_abs}")
+        cp = run_cmd(["git", "-C", str(root), "worktree", "prune"])
+        if cp.returncode != 0:
+            eprint(cp.stderr.strip() or cp.stdout.strip() or "git worktree prune failed")
+            return 1
+        worktree_pruned = True
+
+    # Verify no stale worktree registration remains.
+    if wt_abs is not None and wt_abs in git_worktree_paths(root):
+        eprint(f"error: worktree entry still registered after cleanup: {wt_abs}")
+        return 1
 
     branch_deleted = False
     if branch_exists and branch_merged:
@@ -1414,8 +1442,9 @@ def cmd_feat_archive(args: argparse.Namespace) -> int:
         "base_ref": base_ref,
         "branch_merged": branch_merged,
         "worktree_removed": worktree_removed,
+        "worktree_pruned": worktree_pruned,
         "branch_deleted": branch_deleted,
-        "note": "worktree removed; branch deleted only when merged into base",
+        "note": "worktree removed+pruned; branch deleted only when merged into base",
     }
     state.setdefault("history", []).append(
         {"at": utc_now(), "action": "feat_archived", "detail": "moved + cleaned"}
@@ -1555,6 +1584,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         errors.extend(validate_feat(paths, root, feat_id))
 
     # Validate physical archive layout.
+    registered_worktrees = git_worktree_paths(root)
     for feat_id, status in feat_status_by_id.items():
         active_dir = paths.feat_dir(feat_id)
         archived_dir = paths.feat_dir(feat_id, status="archived")
@@ -1563,6 +1593,18 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 errors.append(f"{feat_id}: archived feat dir must not exist in feats/: {active_dir}")
             if not archived_dir.exists():
                 errors.append(f"{feat_id}: archived feat dir missing: {archived_dir}")
+            try:
+                state, _ = load_feat(paths, feat_id)
+            except SystemExit as exc:
+                errors.append(str(exc))
+                continue
+            wt_raw = str(state.get("worktree_path") or "").strip()
+            if wt_raw:
+                wt_abs = resolve_worktree_abs(root, wt_raw)
+                if wt_abs in registered_worktrees:
+                    errors.append(
+                        f"{feat_id}: archived feat still has registered git worktree entry: {wt_abs}"
+                    )
         else:
             if not active_dir.exists():
                 errors.append(f"{feat_id}: feat dir missing: {active_dir}")

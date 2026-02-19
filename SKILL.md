@@ -71,13 +71,14 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" archive-feat --root . 
 
 Archive semantics are physical + cleanup:
 - move feat runtime dir into `feats-archived/`
-- remove feat worktree
+- remove feat worktree + prune worktree registry
 - delete feat branch when merged
 - set feat status to `archived`
 
 Guardrails:
 - `done` feat must be merged before archive
 - feat worktree must be clean before archive
+- archive fails if stale worktree registration remains after cleanup
 
 6) Validate and diagnose
 
