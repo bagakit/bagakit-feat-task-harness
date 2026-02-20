@@ -1,4 +1,4 @@
 interface:
-  display_name: "Bagakit Feat Task Harness"
+  display_name: "Bagakit-FTHarness"
   short_description: "Feat/task harness with worktree isolation and structured commits"
   default_prompt: "Set up and run the feat/task harness workflow for this project."
