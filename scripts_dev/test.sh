@@ -4,7 +4,7 @@ set -euo pipefail
 dev_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_root="$(cd "${dev_script_dir}/.." && pwd)"
 runtime_scripts_dir="${skill_root}/scripts"
-harness_cli="${runtime_scripts_dir}/feat_task_harness.sh"
+harness_cli="${runtime_scripts_dir}/feat-task-harness.sh"
 
 tmp="$(mktemp -d -t bagakit-ft-harness.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT

@@ -278,7 +278,7 @@ def count_tasks(tasks: dict[str, Any], status: str) -> int:
 def ensure_harness_exists(paths: HarnessPaths) -> None:
     if not paths.harness_dir.exists():
         raise SystemExit(
-            "error: harness not initialized. run feat_task_harness.sh initialize-harness first"
+            "error: harness not initialized. run feat-task-harness.sh initialize-harness first"
         )
 
 
@@ -513,7 +513,7 @@ def check_ref_report(paths: HarnessPaths, skill_dir: Path, manifest_override: st
         issues.append(
             "missing report: "
             f"{paths.ref_report_json} "
-            f"(run feat_task_harness.sh check-reference-readiness --root {paths.root})"
+            f"(run feat-task-harness.sh check-reference-readiness --root {paths.root})"
         )
         return issues
 
@@ -1159,7 +1159,7 @@ def cmd_task_commit(args: argparse.Namespace) -> int:
 
     gate_result = str(task.get("gate_result") or "")
     if gate_result not in GATE_STATUS:
-        eprint("error: task gate_result is missing; run feat_task_harness.sh run-task-gate first")
+        eprint("error: task gate_result is missing; run feat-task-harness.sh run-task-gate first")
         return 1
 
     task_status = args.task_status
@@ -1694,7 +1694,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     print("\nrecommended next steps:")
     print("1) Address threshold warnings before starting next task.")
-    print("2) Run feat_task_harness.sh run-task-gate before every task commit.")
+    print("2) Run feat-task-harness.sh run-task-gate before every task commit.")
     print("3) Promote living-doc inbox items after feat archive when applicable.")
     return 0
 

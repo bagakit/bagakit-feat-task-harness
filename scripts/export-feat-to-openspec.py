@@ -4,9 +4,26 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 from pathlib import Path
 
-from feat_task_harness import HarnessPaths, load_feat, slugify, utc_now
+HARNESS_PATH = Path(__file__).resolve().with_name("feat-task-harness.py")
+
+
+def load_harness_runtime():
+    spec = importlib.util.spec_from_file_location("feat_task_harness_runtime", HARNESS_PATH)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"error: cannot load harness runtime: {HARNESS_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+runtime = load_harness_runtime()
+HarnessPaths = runtime.HarnessPaths
+load_feat = runtime.load_feat
+slugify = runtime.slugify
+utc_now = runtime.utc_now
 
 
 def main() -> int:
@@ -21,7 +38,7 @@ def main() -> int:
     paths = HarnessPaths(root)
     if not paths.harness_dir.exists():
         raise SystemExit(
-            "error: harness missing. run feat_task_harness.sh initialize-harness first"
+            "error: harness missing. run feat-task-harness.sh initialize-harness first"
         )
 
     state, tasks = load_feat(paths, args.feat)

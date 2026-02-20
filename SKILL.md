@@ -40,7 +40,7 @@ This skill enforces:
 
 ```bash
 export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" check-reference-readiness --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root .
 ```
 
 Default manifest is local harness-only:
@@ -50,7 +50,7 @@ Optional OpenSpec profile:
 
 ```bash
 BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
-  bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" check-reference-readiness --root . \
+  bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root . \
   --manifest "$BAGAKIT_FT_SKILL_DIR/references/required-reading-manifest-openspec.json"
 ```
 
@@ -62,29 +62,29 @@ BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
 2) Initialize harness files into project
 
 ```bash
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" initialize-harness --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" initialize-harness --root .
 ```
 
 3) Create feat (+ branch + worktree)
 
 ```bash
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" create-feat --root . --title "<feat-title>" --slug "<feat-slug>" --goal "<goal>"
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "<feat-title>" --slug "<feat-slug>" --goal "<goal>"
 ```
 
 4) Execute task loop
 
 ```bash
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" start-task --root . --feat <feat-id> --task T-001
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" run-task-gate --root . --feat <feat-id> --task T-001
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" prepare-task-commit --root . --feat <feat-id> --task T-001 --summary "<summary>"
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" start-task --root . --feat <feat-id> --task T-001
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" run-task-gate --root . --feat <feat-id> --task T-001
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" prepare-task-commit --root . --feat <feat-id> --task T-001 --summary "<summary>"
 # run git commit manually using generated message path (or pass --execute)
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" finish-task --root . --feat <feat-id> --task T-001 --result done
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" finish-task --root . --feat <feat-id> --task T-001 --result done
 ```
 
 5) Archive feat (finalize)
 
 ```bash
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" archive-feat --root . --feat <feat-id>
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" archive-feat --root . --feat <feat-id>
 ```
 
 Archive semantics are physical + cleanup:
@@ -101,29 +101,29 @@ Guardrails:
 6) Validate and diagnose
 
 ```bash
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" validate-harness --root .
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" diagnose-harness --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" validate-harness --root .
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" diagnose-harness --root .
 ```
 
 ## Public Commands
 
-- `feat_task_harness.sh check-reference-readiness`
-- `feat_task_harness.sh validate-reference-report`
-- `feat_task_harness.sh initialize-harness`
-- `feat_task_harness.sh create-feat`
-- `feat_task_harness.sh show-feat-status`
-- `feat_task_harness.sh start-task`
-- `feat_task_harness.sh run-task-gate`
-- `feat_task_harness.sh prepare-task-commit`
-- `feat_task_harness.sh finish-task`
-- `feat_task_harness.sh archive-feat`
-- `feat_task_harness.sh validate-harness`
-- `feat_task_harness.sh diagnose-harness`
-- `feat_task_harness.sh list-feats`
-- `feat_task_harness.sh get-feat`
-- `feat_task_harness.sh filter-feats`
-- `import_openspec_change.py`
-- `export_feat_to_openspec.py`
+- `feat-task-harness.sh check-reference-readiness`
+- `feat-task-harness.sh validate-reference-report`
+- `feat-task-harness.sh initialize-harness`
+- `feat-task-harness.sh create-feat`
+- `feat-task-harness.sh show-feat-status`
+- `feat-task-harness.sh start-task`
+- `feat-task-harness.sh run-task-gate`
+- `feat-task-harness.sh prepare-task-commit`
+- `feat-task-harness.sh finish-task`
+- `feat-task-harness.sh archive-feat`
+- `feat-task-harness.sh validate-harness`
+- `feat-task-harness.sh diagnose-harness`
+- `feat-task-harness.sh list-feats`
+- `feat-task-harness.sh get-feat`
+- `feat-task-harness.sh filter-feats`
+- `import-openspec-change.py`
+- `export-feat-to-openspec.py`
 
 ## JSON SSOT Model
 
@@ -170,6 +170,19 @@ If living docs are detected (`docs/must-*.md` + `docs/.bagakit/`), feat archive 
 - `howto-<feat-id>-result.md`
 
 If not detected, workflow continues without memory sync.
+
+## Output Routes and Default Mode
+
+- Deliverable type: process-driver execution harness with deterministic task execution outputs.
+- Action handoff output (default route): feat/task status progression in `.bagakit/ft-harness/` plus operator next command from harness scripts.
+- Memory handoff output (default route): feat summary artifacts under `.bagakit/ft-harness/feats-archived/<feat-id>/summary.md`.
+- Optional adapter route: when living-docs signal is available, sync summary notes into `docs/.bagakit/inbox/` using optional contract behavior.
+- Adapter policy: optional routes only; core workflow remains standalone-first with no mandatory external system.
+
+## Archive Gate (Completion Handoff)
+
+- Archive completion requires explicit destination evidence for `action_handoff` (archived feat status + paths) and `memory_handoff` (summary destination path, or explicit `none` rationale).
+- Do not mark completion until archive command succeeds, destination path/id is written, and cleanup checks (worktree/branch guardrails) are verified.
 
 ## `[[BAGAKIT]]` Footer Contract
 

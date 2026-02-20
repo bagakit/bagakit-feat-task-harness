@@ -4,21 +4,33 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 from pathlib import Path
 
-from feat_task_harness import (
-    FEAT_ID_RE,
-    HarnessPaths,
-    ensure_git_repo,
-    ensure_worktrees_ignored,
-    pick_base_branch,
-    run_cmd,
-    save_feat,
-    slugify,
-    utc_day,
-    utc_now,
-)
+HARNESS_PATH = Path(__file__).resolve().with_name("feat-task-harness.py")
+
+
+def load_harness_runtime():
+    spec = importlib.util.spec_from_file_location("feat_task_harness_runtime", HARNESS_PATH)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"error: cannot load harness runtime: {HARNESS_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+runtime = load_harness_runtime()
+FEAT_ID_RE = runtime.FEAT_ID_RE
+HarnessPaths = runtime.HarnessPaths
+ensure_git_repo = runtime.ensure_git_repo
+ensure_worktrees_ignored = runtime.ensure_worktrees_ignored
+pick_base_branch = runtime.pick_base_branch
+run_cmd = runtime.run_cmd
+save_feat = runtime.save_feat
+slugify = runtime.slugify
+utc_day = runtime.utc_day
+utc_now = runtime.utc_now
 
 TASK_LINE_RE = re.compile(r"^- \[( |x)\]\s*(.+)$")
 
@@ -86,7 +98,7 @@ def main() -> int:
     ensure_git_repo(root)
     if not paths.harness_dir.exists():
         raise SystemExit(
-            "error: harness missing. run feat_task_harness.sh initialize-harness first"
+            "error: harness missing. run feat-task-harness.sh initialize-harness first"
         )
 
     if args.feat_id:
