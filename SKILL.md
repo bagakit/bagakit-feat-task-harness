@@ -1,9 +1,27 @@
 ---
 name: bagakit-feat-task-harness
-description: Build and run a feat/task long-running harness with per-feat git worktree isolation, JSON SSOT state transitions, strict task-level commit protocol, physical feat archive, and optional OpenSpec adapters.
+description: Build and run a feat/task long-running harness with per-feat worktree isolation, JSON SSOT transitions, strict task-level commit protocol, physical feat archive, and optional adapter contracts. Use when engineering delivery needs deterministic orchestration and traceability.
 ---
 
 # Bagakit Feat Task Harness
+
+## Standalone-First Contract
+
+- This skill is standalone-first: core feat/task orchestration works without other skills.
+- Cross-skill integration is optional and contract/signal based (for example optional OpenSpec import/export adapters).
+- Runtime state transitions must be script-driven from this skill, not manual edits.
+
+## When to Use
+
+- You need deterministic feat/task lifecycle with strict JSON SSOT.
+- You need one isolated worktree per feat and explicit archive cleanup.
+- You need structured commit protocol and gate evidence for long-running delivery.
+
+## When NOT to Use
+
+- The change is tiny and does not need feat/task orchestration overhead.
+- You only need docs/memory workflow and no worktree/state machine.
+- You require hard coupling to a specific external skill flow as mandatory behavior.
 
 ## Overview
 
@@ -25,7 +43,7 @@ export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.baga
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat_task_harness.sh" check-reference-readiness --root .
 ```
 
-Default manifest is Bagakit-only:
+Default manifest is local harness-only:
 - `references/required-reading-manifest.json`
 
 Optional OpenSpec profile:
@@ -152,3 +170,14 @@ If living docs are detected (`docs/must-*.md` + `docs/.bagakit/`), feat archive 
 - `howto-<feat-id>-result.md`
 
 If not detected, workflow continues without memory sync.
+
+## `[[BAGAKIT]]` Footer Contract
+
+```text
+[[BAGAKIT]]
+- FTHarness: Feat=<feat-id>; Task=<task-id|none>; Status=<in_progress|done|blocked|archived>; Evidence=<gate/commit/archive checks>; Next=<one deterministic command>
+```
+
+## Fallback Path
+
+- If reference readiness or task gates fail, stop transition, report blocker evidence, and continue only after an explicit recovery plan is recorded.
