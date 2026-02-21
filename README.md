@@ -25,25 +25,17 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readin
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" initialize-harness --root .
 ```
 
-`check-reference-readiness` auto-detects `BAGAKIT_REFERENCE_SKILLS_HOME` from:
-- `$BAGAKIT_REFERENCE_SKILLS_HOME` (if set)
-- `${BAGAKIT_HOME}/skills`
-- `$HOME/.bagakit/skills`
-
-For one-shot shell invocations, pass override inline:
-
-```bash
-BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
-  bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root .
-```
+Default `check-reference-readiness` is local and standalone-first:
+- it reads local ft-harness references from `references/required-reading-manifest.json`
+- it does not require any external/prebuilt skill install
 
 ## Optional ref-read manifests
 
-- Default strict gate: `references/required-reading-manifest.json`
-- Optional OpenSpec profile: `references/required-reading-manifest-openspec.json`
+- Default strict gate: `references/required-reading-manifest.json` (local ft-harness docs only)
+- Optional OpenSpec profile: `references/required-reading-manifest-openspec.json` (explicit opt-in)
 
 ```bash
-BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
+BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-$HOME/.bagakit/skills}" \
   bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root . \
   --manifest "$BAGAKIT_FT_SKILL_DIR/references/required-reading-manifest-openspec.json"
 ```

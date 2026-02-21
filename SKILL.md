@@ -49,7 +49,7 @@ Default manifest is local harness-only:
 Optional OpenSpec profile:
 
 ```bash
-BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
+BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-$HOME/.bagakit/skills}" \
   bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root . \
   --manifest "$BAGAKIT_FT_SKILL_DIR/references/required-reading-manifest-openspec.json"
 ```
@@ -58,6 +58,10 @@ BAGAKIT_REFERENCE_SKILLS_HOME=/absolute/path/to/skills \
 - `$BAGAKIT_REFERENCE_SKILLS_HOME` (if set)
 - `${BAGAKIT_HOME}/skills`
 - `$HOME/.bagakit/skills`
+
+Standalone policy for ref-read:
+- default manifest must not require any external/prebuilt skills
+- external skill references are allowed only in explicit opt-in manifests
 
 2) Initialize harness files into project
 

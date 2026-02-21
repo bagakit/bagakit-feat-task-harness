@@ -323,11 +323,67 @@ def manifest_path(skill_dir: Path, path_override: str | None) -> Path:
     return skill_dir / "references" / "required-reading-manifest.json"
 
 
-def resolve_manifest_location(raw: str) -> tuple[str, str | None]:
+def resolve_manifest_location(raw: str, *, manifest_dir: Path) -> tuple[Path | None, str | None]:
     expanded = os.path.expanduser(os.path.expandvars(raw))
     if UNRESOLVED_ENV_RE.search(expanded):
-        return expanded, "unresolved environment variable in location"
-    return expanded, None
+        return None, "unresolved environment variable in location"
+    path = Path(expanded)
+    if not path.is_absolute():
+        path = (manifest_dir / path).resolve()
+    return path, None
+
+
+def portable_path_for_report(
+    path: Path,
+    *,
+    root: Path,
+    skill_dir: Path,
+    manifest_dir: Path,
+    reference_skills_home: Path | None,
+) -> str:
+    resolved = path.resolve()
+    bases: list[tuple[str, Path]] = [
+        ("<project-root>", root),
+        ("<skill-dir>", skill_dir),
+        ("<manifest-dir>", manifest_dir),
+    ]
+    if reference_skills_home is not None:
+        bases.append((f"${REFERENCE_SKILLS_ENV}", reference_skills_home))
+    bases.append(("$HOME", Path.home()))
+
+    for prefix, base in bases:
+        try:
+            rel = resolved.relative_to(base.resolve())
+        except ValueError:
+            continue
+        rel_text = rel.as_posix()
+        if rel_text in {"", "."}:
+            return prefix
+        return f"{prefix}/{rel_text}"
+    return "<absolute-path-redacted>"
+
+
+def report_location_label(
+    raw: str,
+    *,
+    root: Path,
+    skill_dir: Path,
+    manifest_dir: Path,
+    reference_skills_home: Path | None,
+) -> str:
+    expanded = os.path.expanduser(os.path.expandvars(raw))
+    if UNRESOLVED_ENV_RE.search(expanded):
+        return raw
+    path = Path(expanded)
+    if path.is_absolute():
+        return portable_path_for_report(
+            path,
+            root=root,
+            skill_dir=skill_dir,
+            manifest_dir=manifest_dir,
+            reference_skills_home=reference_skills_home,
+        )
+    return path.as_posix()
 
 
 def default_reference_skills_home() -> Path | None:
@@ -365,7 +421,15 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
     paths = HarnessPaths(root)
     skill_dir = Path(args.skill_dir).resolve()
     mpath = manifest_path(skill_dir, args.manifest)
+    manifest_dir = mpath.parent.resolve()
     detected_ref_home = ensure_reference_skills_home()
+    manifest_path_label = portable_path_for_report(
+        mpath,
+        root=root,
+        skill_dir=skill_dir,
+        manifest_dir=manifest_dir,
+        reference_skills_home=detected_ref_home,
+    )
 
     if not mpath.exists():
         eprint(f"error: manifest not found: {mpath}")
@@ -379,12 +443,22 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
 
     result_entries: list[dict[str, Any]] = []
     ok = True
+    needs_reference_skills_home = False
 
     for entry in entries:
         entry_id = str(entry.get("id", ""))
         entry_type = str(entry.get("type", ""))
         location = str(entry.get("location", ""))
-        resolved_location = location
+        if REFERENCE_SKILLS_ENV in location:
+            needs_reference_skills_home = True
+        location_label = report_location_label(
+            location,
+            root=root,
+            skill_dir=skill_dir,
+            manifest_dir=manifest_dir,
+            reference_skills_home=detected_ref_home,
+        )
+        resolved_location = location_label
         required = bool(entry.get("required", True))
         exists = False
         digest = ""
@@ -394,15 +468,21 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
             ok = False
             error = "invalid manifest entry"
         elif entry_type == "file":
-            resolved_location, resolve_error = resolve_manifest_location(location)
+            resolved_path, resolve_error = resolve_manifest_location(location, manifest_dir=manifest_dir)
             if resolve_error:
                 exists = False
                 error = resolve_error
             else:
-                p = Path(resolved_location)
-                if p.exists() and p.is_file():
+                resolved_location = portable_path_for_report(
+                    resolved_path,
+                    root=root,
+                    skill_dir=skill_dir,
+                    manifest_dir=manifest_dir,
+                    reference_skills_home=detected_ref_home,
+                )
+                if resolved_path.exists() and resolved_path.is_file():
                     exists = True
-                    digest = sha256_file(p)
+                    digest = sha256_file(resolved_path)
                 else:
                     exists = False
                     error = "file not found"
@@ -423,7 +503,7 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
             {
                 "id": entry_id,
                 "type": entry_type,
-                "location": location,
+                "location": location_label,
                 "resolved_location": resolved_location,
                 "required": required,
                 "exists": exists,
@@ -439,8 +519,8 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
     payload = {
         "status": status,
         "generated_at": generated_at,
-        "project_root": str(root),
-        "manifest_path": str(mpath),
+        "project_root": "<project-root>",
+        "manifest_path": manifest_path_label,
         "manifest_sha256": mhash,
         "entries": result_entries,
     }
@@ -453,8 +533,8 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
         "",
         f"Status: {status}",
         f"Generated At (UTC): {generated_at}",
-        f"Project Root: {root}",
-        f"Manifest Path: {mpath}",
+        "Project Root: <project-root>",
+        f"Manifest Path: {manifest_path_label}",
         f"Manifest SHA256: {mhash}",
         "",
         "## Entries",
@@ -488,8 +568,15 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
     print(f"write: {paths.ref_report_json}")
     print(f"write: {paths.ref_report_md}")
     if detected_ref_home is not None:
-        print(f"info: {REFERENCE_SKILLS_ENV}={detected_ref_home}")
-    else:
+        detected_ref_home_label = portable_path_for_report(
+            detected_ref_home,
+            root=root,
+            skill_dir=skill_dir,
+            manifest_dir=manifest_dir,
+            reference_skills_home=detected_ref_home,
+        )
+        print(f"info: {REFERENCE_SKILLS_ENV}={detected_ref_home_label}")
+    elif needs_reference_skills_home:
         eprint(
             "warn: BAGAKIT_REFERENCE_SKILLS_HOME not found automatically; "
             "file-based manifest entries may fail if required skills are missing"
@@ -541,12 +628,20 @@ def check_ref_report(paths: HarnessPaths, skill_dir: Path, manifest_override: st
         if item.get("required", True) and not item.get("exists", False)
     ]
     if missing_required:
-        issues.append(f"missing required references: {', '.join(str(i) for i in missing_required)}")
-        issues.append(
-            "hint: ensure required skills are installed and "
-            "set BAGAKIT_REFERENCE_SKILLS_HOME to the correct skills directory "
-            "(for one-shot shell calls, set it inline with the command)"
+        needs_reference_skills_home = any(
+            REFERENCE_SKILLS_ENV in str(item.get("location", ""))
+            for item in entries
+            if isinstance(item, dict)
         )
+        issues.append(f"missing required references: {', '.join(str(i) for i in missing_required)}")
+        if needs_reference_skills_home:
+            issues.append(
+                "hint: ensure required skills are installed and "
+                "set BAGAKIT_REFERENCE_SKILLS_HOME to the correct skills directory "
+                "(for one-shot shell calls, set it inline with the command)"
+            )
+        else:
+            issues.append("hint: ensure local manifest file entries exist and are readable")
 
     return issues
 

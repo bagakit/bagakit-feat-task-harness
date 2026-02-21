@@ -20,9 +20,10 @@ if ! grep -q "must not hard-depend on external workflow systems" "$skill_root/do
   exit 1
 fi
 
-echo "[test] audit default manifest (no required OpenSpec / url entries)"
+echo "[test] audit default manifest (local ft-harness only)"
 python3 - <<PY
 import json
+import re
 from pathlib import Path
 
 manifest = Path(r"$skill_root") / "references" / "required-reading-manifest.json"
@@ -35,13 +36,17 @@ for e in entries:
     required = bool(e.get("required", True))
     etype = str(e.get("type", ""))
     location = str(e.get("location", ""))
-    if required and (eid.startswith("openspec-") or "openspec" in location):
-        bad.append(eid or location)
     if required and etype == "url":
         bad.append(f"url-required:{eid or location}")
+    if location.startswith("/") or re.match(r"^[A-Za-z]:[\\\\/]", location):
+        bad.append(f"absolute-path:{eid or location}")
+    if "BAGAKIT_REFERENCE_SKILLS_HOME" in location:
+        bad.append(f"external-skill-home:{eid or location}")
+    if "openspec" in eid.lower() or "openspec" in location.lower():
+        bad.append(f"openspec-in-default:{eid or location}")
 
 if bad:
-    raise SystemExit("default manifest has hard external dependencies: " + ", ".join(bad))
+    raise SystemExit("default manifest must be local-only and standalone: " + ", ".join(bad))
 PY
 
 echo "[test] audit optional OpenSpec manifest (local-skill only)"
@@ -64,26 +69,6 @@ if bad:
     raise SystemExit("openspec manifest must not require remote url entries: " + ", ".join(bad))
 PY
 
-echo "[test] seed required references"
-python3 - <<PY
-import json
-import os
-from pathlib import Path
-
-manifest = Path(r"$skill_root") / "references" / "required-reading-manifest.json"
-data = json.loads(manifest.read_text(encoding="utf-8"))
-for entry in data.get("entries", []):
-    if entry.get("type") != "file":
-        continue
-    raw = str(entry.get("location", "")).strip()
-    if not raw:
-        continue
-    p = Path(os.path.expanduser(os.path.expandvars(raw)))
-    p.parent.mkdir(parents=True, exist_ok=True)
-    if not p.exists():
-        p.write_text("# seeded by test\n", encoding="utf-8")
-PY
-
 pushd "$project" >/dev/null
 git init -q
 git config user.email "bagakit-bot@example.com"
@@ -95,6 +80,32 @@ popd >/dev/null
 
 echo "[test] ref read gate"
 bash "$harness_cli" check-reference-readiness --root "$project"
+
+echo "[test] ref report must avoid absolute paths"
+python3 - <<PY
+import json
+import re
+from pathlib import Path
+
+report = Path(r"$project") / ".bagakit" / "ft-harness" / "artifacts" / "ref-read-report.json"
+data = json.loads(report.read_text(encoding="utf-8"))
+entries = data.get("entries", [])
+
+def is_abs(value: str) -> bool:
+    return value.startswith("/") or bool(re.match(r"^[A-Za-z]:[\\\\/]", value))
+
+checks = [
+    ("project_root", str(data.get("project_root", ""))),
+    ("manifest_path", str(data.get("manifest_path", ""))),
+]
+for item in entries:
+    checks.append((f"entry:{item.get('id', '')}:location", str(item.get("location", ""))))
+    checks.append((f"entry:{item.get('id', '')}:resolved_location", str(item.get("resolved_location", ""))))
+
+violations = [f"{k}={v}" for k, v in checks if v and is_abs(v)]
+if violations:
+    raise SystemExit("ref report leaks absolute paths: " + ", ".join(violations))
+PY
 
 echo "[test] openspec manifest should fail before seeding optional refs"
 if bash "$harness_cli" check-reference-readiness --root "$project" --manifest "$skill_root/references/required-reading-manifest-openspec.json" >/dev/null 2>&1; then

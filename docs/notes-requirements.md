@@ -19,9 +19,9 @@ sop:
 ## Strict Ref-Read Gate Policy
 
 - Default strict gate uses: `references/required-reading-manifest.json`
-  - Bagakit-only
+  - local ft-harness references only
+  - no required external/prebuilt skills
   - no required URL entries
-  - no required OpenSpec skills
 - OpenSpec workflows are opt-in via: `references/required-reading-manifest-openspec.json`
   - local-skill checks only (no required remote URL fetch)
 

@@ -1,23 +1,23 @@
 {
   "version": 1,
-  "description": "Required references that must be read before strict harness operations.",
+  "description": "Required local ft-harness references that must be read before strict harness operations.",
   "entries": [
     {
-      "id": "bagakit-living-docs-skill",
+      "id": "ft-harness-skill-contract",
       "type": "file",
-      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/bagakit-living-docs/SKILL.md",
+      "location": "../SKILL.md",
       "required": true
     },
     {
-      "id": "git-worktree-skill",
+      "id": "ft-harness-requirements",
       "type": "file",
-      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/git-worktree/SKILL.md",
-      "required": false
+      "location": "../docs/notes-requirements.md",
+      "required": true
     },
     {
-      "id": "using-git-worktrees-skill",
+      "id": "ft-harness-guidebook",
       "type": "file",
-      "location": "$BAGAKIT_REFERENCE_SKILLS_HOME/using-git-worktrees/SKILL.md",
+      "location": "../docs/must-guidebook.md",
       "required": false
     }
   ]
