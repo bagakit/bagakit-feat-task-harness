@@ -677,8 +677,8 @@ def cmd_apply(args: argparse.Namespace) -> int:
     paths.index_dir.mkdir(parents=True, exist_ok=True)
     paths.artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-    copy_template_if_missing(skill_dir, "feats-index-template.json", paths.index_file)
-    copy_template_if_missing(skill_dir, "harness-config-template.json", paths.config_file)
+    copy_template_if_missing(skill_dir, "tpl/feats-index-template.json", paths.index_file)
+    copy_template_if_missing(skill_dir, "tpl/harness-config-template.json", paths.config_file)
 
     if not (paths.harness_dir / "README.md").exists():
         runtime_rel = str(paths.harness_dir.relative_to(root))
@@ -783,17 +783,17 @@ def cmd_feat_new(args: argparse.Namespace) -> int:
         eprint("error: failed to create worktree")
         return 1
 
-    proposal = load_template(skill_dir, "feat-proposal-template.md")
+    proposal = load_template(skill_dir, "tpl/feat-proposal-template.md")
     proposal = (
         proposal.replace("<feat-id>", feat_id)
         .replace("<goal>", goal)
     )
     write_text(feat_dir / "proposal.md", proposal)
 
-    tasks_md = load_template(skill_dir, "feat-tasks-template.md").replace("<feat-id>", feat_id)
+    tasks_md = load_template(skill_dir, "tpl/feat-tasks-template.md").replace("<feat-id>", feat_id)
     write_text(feat_dir / "tasks.md", tasks_md)
 
-    spec_delta = load_template(skill_dir, "feat-spec-delta-template.md").replace("<capability>", "core")
+    spec_delta = load_template(skill_dir, "tpl/feat-spec-delta-template.md").replace("<capability>", "core")
     write_text(feat_dir / "spec-deltas" / "core.md", spec_delta)
 
     state: dict[str, Any] = {
@@ -856,7 +856,7 @@ def cmd_feat_new(args: argparse.Namespace) -> int:
     save_feat(paths, feat_id, state, tasks)
     write_text(
         feat_dir / "gate" / "ui-verification.md",
-        load_template(skill_dir, "ui-gate-template.md"),
+        load_template(skill_dir, "tpl/ui-gate-template.md"),
     )
 
     print(f"write: {feat_dir / 'state.json'}")
@@ -1515,17 +1515,17 @@ def cmd_feat_archive(args: argparse.Namespace) -> int:
             "<feat-id>": args.feat,
             "<created-at>": utc_now(),
         }
-        decision = apply_template(load_template(skill_dir, "inbox-decision-template.md"), repl)
+        decision = apply_template(load_template(skill_dir, "tpl/inbox-decision-template.md"), repl)
         write_text(inbox_dir / f"decision-{args.feat}.md", decision)
         print(f"write: {inbox_dir / f'decision-{args.feat}.md'}")
 
-        howto = apply_template(load_template(skill_dir, "inbox-howto-template.md"), repl)
+        howto = apply_template(load_template(skill_dir, "tpl/inbox-howto-template.md"), repl)
         write_text(inbox_dir / f"howto-{args.feat}-result.md", howto)
         print(f"write: {inbox_dir / f'howto-{args.feat}-result.md'}")
 
         counters = state.get("counters", {})
         if state.get("status") == "blocked" or int(counters.get("gate_fail_streak", 0)) > 0:
-            gotcha = apply_template(load_template(skill_dir, "inbox-gotcha-template.md"), repl)
+            gotcha = apply_template(load_template(skill_dir, "tpl/inbox-gotcha-template.md"), repl)
             write_text(inbox_dir / f"gotcha-{args.feat}.md", gotcha)
             print(f"write: {inbox_dir / f'gotcha-{args.feat}.md'}")
 

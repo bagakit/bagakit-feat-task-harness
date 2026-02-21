@@ -29,6 +29,10 @@ Default `check-reference-readiness` is local and standalone-first:
 - it reads local ft-harness references from `references/required-reading-manifest.json`
 - it does not require any external/prebuilt skill install
 
+Repo convention:
+- `references/tpl/`: runtime templates (feat/task scaffolding, inbox note templates)
+- `references/`: non-template references (manifests, policy lists)
+
 ## Optional ref-read manifests
 
 - Default strict gate: `references/required-reading-manifest.json` (local ft-harness docs only)

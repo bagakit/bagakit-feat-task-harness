@@ -34,6 +34,10 @@ This skill enforces:
 - task-level structured commits (`Plan/Check/Learn` + trailers)
 - script-driven transitions only (no manual state edits)
 
+Repository reference layout:
+- `references/tpl/`: scaffolding templates used by runtime scripts
+- `references/`: non-template references (for example required-reading manifests)
+
 ## Workflow
 
 1) Generate reference-read report (strict gate)
