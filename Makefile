@@ -10,14 +10,14 @@ AGENT_FLAGS ?=
 install-skill:
 	rm -rf "$(SKILL_DIR)"
 	mkdir -p "$(SKILL_DIR)"
-	cp -R SKILL.md README.md agents references scripts "$(SKILL_DIR)/"
+	cp -R SKILL.md SKILL_PAYLOAD.json README.md agents references scripts "$(SKILL_DIR)/"
 	find "$(SKILL_DIR)/scripts" -type f -name "*.sh" -exec chmod +x {} +
 	find "$(SKILL_DIR)/scripts" -type f -name "*.py" -exec chmod +x {} +
 	@echo "installed: $(SKILL_DIR)"
 
 package-skill: clean
 	mkdir -p dist
-	zip -r "$(PACKAGE)" SKILL.md README.md agents references scripts >/dev/null
+	zip -r "$(PACKAGE)" SKILL.md SKILL_PAYLOAD.json README.md agents references scripts >/dev/null
 	@echo "packaged: $(PACKAGE)"
 
 test:
