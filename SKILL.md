@@ -43,7 +43,7 @@ Repository reference layout:
 1) Generate reference-read report (strict gate)
 
 ```bash
-export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
+export BAGAKIT_FT_SKILL_DIR="<path-to-bagakit-feat-task-harness-skill>"
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root .
 ```
 
@@ -53,15 +53,12 @@ Default manifest is local harness-only:
 Optional OpenSpec profile:
 
 ```bash
-BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-$HOME/.bagakit/skills}" \
+BAGAKIT_REFERENCE_SKILLS_HOME="<path-to-installed-skills-root>" \
   bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root . \
   --manifest "$BAGAKIT_FT_SKILL_DIR/references/required-reading-manifest-openspec.json"
 ```
 
-`check-reference-readiness` auto-detects `BAGAKIT_REFERENCE_SKILLS_HOME` from:
-- `$BAGAKIT_REFERENCE_SKILLS_HOME` (if set)
-- `${BAGAKIT_HOME}/skills`
-- `$HOME/.bagakit/skills`
+`check-reference-readiness` requires `BAGAKIT_REFERENCE_SKILLS_HOME` to be explicit when manifest entries reference `${BAGAKIT_REFERENCE_SKILLS_HOME}`.
 
 Standalone policy for ref-read:
 - default manifest must not require any external/prebuilt skills

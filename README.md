@@ -12,7 +12,7 @@ A Bagakit skill for multi-session feat/task orchestration with:
 ## Install skill locally
 
 ```bash
-make install-skill BAGAKIT_HOME=~/.bagakit
+make install-skill
 ```
 
 Restart Bagakit Agent after installation.
@@ -20,7 +20,7 @@ Restart Bagakit Agent after installation.
 ## Initialize in target project
 
 ```bash
-export BAGAKIT_FT_SKILL_DIR="${BAGAKIT_FT_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-feat-task-harness}"
+export BAGAKIT_FT_SKILL_DIR="<path-to-bagakit-feat-task-harness-skill>"
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root .
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" initialize-harness --root .
 ```
@@ -39,10 +39,12 @@ Repo convention:
 - Optional OpenSpec profile: `references/required-reading-manifest-openspec.json` (explicit opt-in)
 
 ```bash
-BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-$HOME/.bagakit/skills}" \
+BAGAKIT_REFERENCE_SKILLS_HOME="<path-to-installed-skills-root>" \
   bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" check-reference-readiness --root . \
   --manifest "$BAGAKIT_FT_SKILL_DIR/references/required-reading-manifest-openspec.json"
 ```
+
+`BAGAKIT_REFERENCE_SKILLS_HOME` must be set explicitly for manifests that reference external skills.
 
 When `--strict` is enabled, pass the same manifest to `initialize-harness` / `create-feat`.
 

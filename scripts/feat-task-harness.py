@@ -438,26 +438,11 @@ def default_reference_skills_home() -> Path | None:
     env_raw = os.environ.get(REFERENCE_SKILLS_ENV, "").strip()
     if env_raw:
         return Path(os.path.expanduser(os.path.expandvars(env_raw)))
-
-    home = Path.home()
-    candidates = [
-        Path(os.path.expanduser(os.path.expandvars(os.environ.get("BAGAKIT_HOME", "")))) / "skills"
-        if os.environ.get("BAGAKIT_HOME")
-        else None,
-        home / ".bagakit" / "skills",
-    ]
-    for c in candidates:
-        if c and c.exists() and c.is_dir():
-            return c
     return None
 
 
 def ensure_reference_skills_home() -> Path | None:
-    p = default_reference_skills_home()
-    if p is None:
-        return None
-    os.environ.setdefault(REFERENCE_SKILLS_ENV, str(p))
-    return p
+    return default_reference_skills_home()
 
 
 def compute_manifest_hash(path: Path) -> str:
@@ -626,8 +611,8 @@ def cmd_ref_read_gate(args: argparse.Namespace) -> int:
         print(f"info: {REFERENCE_SKILLS_ENV}={detected_ref_home_label}")
     elif needs_reference_skills_home:
         eprint(
-            "warn: BAGAKIT_REFERENCE_SKILLS_HOME not found automatically; "
-            "file-based manifest entries may fail if required skills are missing"
+            "warn: BAGAKIT_REFERENCE_SKILLS_HOME is required for manifests that reference external skills; "
+            "set it explicitly to the skills root before running this command"
         )
     if not ok:
         eprint("error: reference read gate failed (missing required entries)")
