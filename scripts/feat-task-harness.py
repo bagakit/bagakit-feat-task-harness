@@ -12,7 +12,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import textwrap
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -27,6 +26,9 @@ TASK_STATUS = {"todo", "in_progress", "done", "blocked"}
 GATE_STATUS = {"pass", "fail"}
 UNRESOLVED_ENV_RE = re.compile(r"\$\{?[A-Za-z_][A-Za-z0-9_]*")
 REFERENCE_SKILLS_ENV = "BAGAKIT_REFERENCE_SKILLS_HOME"
+RUNTIME_POLICY_FILENAME = "runtime-policy.json"
+LEGACY_CONFIG_FILENAME = "config.json"
+FEATS_DAG_FILENAME = "FEATS_DAG.json"
 
 
 def utc_now() -> str:
@@ -154,8 +156,20 @@ class HarnessPaths:
         return self.index_dir / "feats.json"
 
     @property
-    def config_file(self) -> Path:
-        return self.harness_dir / "config.json"
+    def runtime_policy_file(self) -> Path:
+        return self.harness_dir / RUNTIME_POLICY_FILENAME
+
+    @property
+    def legacy_config_file(self) -> Path:
+        return self.harness_dir / LEGACY_CONFIG_FILENAME
+
+    @property
+    def dag_file(self) -> Path:
+        return self.index_dir / FEATS_DAG_FILENAME
+
+    @property
+    def dag_archive_dir(self) -> Path:
+        return self.index_dir / "archive"
 
     @property
     def ref_report_json(self) -> Path:
@@ -191,6 +205,40 @@ def load_index(paths: HarnessPaths) -> dict[str, Any]:
 def save_index(paths: HarnessPaths, index_data: dict[str, Any]) -> None:
     index_data["updated_at"] = utc_now()
     save_json(paths.index_file, index_data)
+
+
+def load_runtime_policy(paths: HarnessPaths) -> dict[str, Any]:
+    target = paths.runtime_policy_file
+    if not target.exists():
+        if paths.legacy_config_file.exists():
+            raise SystemExit(
+                "error: detected legacy policy file "
+                f"{paths.legacy_config_file}. "
+                "legacy compatibility is disabled; migrate manually by comparing current SKILL.md "
+                "and creating runtime-policy.json."
+            )
+        raise SystemExit(
+            f"error: missing runtime policy file: {paths.runtime_policy_file}. "
+            "run feat-task-harness.sh initialize-harness to scaffold the latest layout."
+        )
+    payload = load_json(target)
+    if not isinstance(payload, dict):
+        raise SystemExit(f"error: invalid runtime policy schema: {target}")
+    return payload
+
+
+def ensure_runtime_policy(paths: HarnessPaths, skill_dir: Path) -> Path:
+    if paths.runtime_policy_file.exists():
+        return paths.runtime_policy_file
+    if paths.legacy_config_file.exists():
+        raise SystemExit(
+            "error: detected legacy policy file "
+            f"{paths.legacy_config_file}. "
+            "automatic compatibility migration is disabled; migrate manually to runtime-policy.json."
+        )
+
+    copy_template_if_missing(skill_dir, "tpl/runtime-policy-template.json", paths.runtime_policy_file)
+    return paths.runtime_policy_file
 
 
 def get_feat_index_entry(index_data: dict[str, Any], feat_id: str) -> dict[str, Any] | None:
@@ -675,18 +723,12 @@ def cmd_apply(args: argparse.Namespace) -> int:
     paths.feats_dir.mkdir(parents=True, exist_ok=True)
     paths.feats_archived_dir.mkdir(parents=True, exist_ok=True)
     paths.index_dir.mkdir(parents=True, exist_ok=True)
+    paths.dag_archive_dir.mkdir(parents=True, exist_ok=True)
     paths.artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     copy_template_if_missing(skill_dir, "tpl/feats-index-template.json", paths.index_file)
-    copy_template_if_missing(skill_dir, "tpl/harness-config-template.json", paths.config_file)
-
-    if not (paths.harness_dir / "README.md").exists():
-        runtime_rel = str(paths.harness_dir.relative_to(root))
-        write_text(
-            paths.harness_dir / "README.md",
-            f"# {runtime_rel}\n\nJSON SSOT feat/task harness runtime data.\n",
-        )
-        print(f"write: {paths.harness_dir / 'README.md'}")
+    ensure_runtime_policy(paths, skill_dir)
+    copy_template_if_missing(skill_dir, "tpl/feats-dag-template.json", paths.dag_file)
 
     if not (paths.harness_dir / ".gitignore").exists():
         write_text(paths.harness_dir / ".gitignore", "artifacts/*.log\n")
@@ -983,7 +1025,7 @@ def detect_project_type(root: Path, config: dict[str, Any]) -> str:
             return "non_ui"
         return default_type
 
-    # Legacy compatibility fallback when no rules are configured.
+    # Default behavior when no detection rules are configured.
     return "non_ui"
 
 
@@ -1041,7 +1083,7 @@ def cmd_task_gate(args: argparse.Namespace) -> int:
         eprint("error: feat current_task_id does not match requested task")
         return 1
 
-    config = load_json(paths.config_file) if paths.config_file.exists() else {}
+    config = load_runtime_policy(paths)
     project_type = detect_project_type(root, config)
 
     records: list[dict[str, Any]] = []
@@ -1072,7 +1114,8 @@ def cmd_task_gate(args: argparse.Namespace) -> int:
         if not commands:
             failed = True
             fail_reasons.append(
-                f"no non-ui gate command available; set gate.non_ui_commands in {paths.config_file.relative_to(root)}"
+                "no non-ui gate command available; "
+                f"set gate.non_ui_commands in {paths.runtime_policy_file.relative_to(root)}"
             )
         else:
             for cmd in commands:
@@ -1660,6 +1703,15 @@ def cmd_validate(args: argparse.Namespace) -> int:
     errors: list[str] = []
     if not paths.index_file.exists():
         errors.append(f"missing index file: {paths.index_file}")
+    if not paths.runtime_policy_file.exists():
+        if paths.legacy_config_file.exists():
+            errors.append(
+                "legacy policy file is not supported: "
+                f"{paths.legacy_config_file}. "
+                "migrate manually to runtime-policy.json."
+            )
+        else:
+            errors.append(f"missing runtime policy file: {paths.runtime_policy_file}")
 
     feats: list[str] = []
     feat_status_by_id: dict[str, str] = {}
@@ -1718,6 +1770,32 @@ def cmd_validate(args: argparse.Namespace) -> int:
             if child.is_dir() and child.name not in feats:
                 errors.append(f"archived feat directory not indexed: {child.name}")
 
+    if paths.dag_file.exists():
+        try:
+            dag = load_json(paths.dag_file)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"failed to load dag file: {exc}")
+        else:
+            if not isinstance(dag, dict):
+                errors.append(f"invalid dag schema: {paths.dag_file}")
+            else:
+                layers = dag.get("layers", [])
+                if not isinstance(layers, list):
+                    errors.append(f"invalid dag layers schema: {paths.dag_file}")
+                else:
+                    known_feats = set(feats)
+                    for layer in layers:
+                        if not isinstance(layer, dict):
+                            errors.append("invalid dag layer entry: expected object")
+                            continue
+                        feat_ids = layer.get("feat_ids", [])
+                        if not isinstance(feat_ids, list):
+                            errors.append("invalid dag layer feat_ids: expected list")
+                            continue
+                        for feat_id in feat_ids:
+                            if str(feat_id) not in known_feats:
+                                errors.append(f"dag references feat not in index: {feat_id}")
+
     if errors:
         for err in errors:
             eprint(f"error: {err}")
@@ -1742,7 +1820,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         eprint("doctor: validation failed first")
         return 1
 
-    config = load_json(paths.config_file) if paths.config_file.exists() else {}
+    config = load_runtime_policy(paths)
     thresholds = config.get("stop_thresholds", {}) if isinstance(config, dict) else {}
     gate_fail_limit = int(thresholds.get("gate_fail_streak", 3))
     no_progress_limit = int(thresholds.get("no_progress_rounds", 2))
@@ -1791,6 +1869,400 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print("1) Address threshold warnings before starting next task.")
     print("2) Run feat-task-harness.sh run-task-gate before every task commit.")
     print("3) Promote living-doc inbox items after feat archive when applicable.")
+    return 0
+
+
+def parse_dependency_spec(raw: str) -> tuple[str, list[str]]:
+    if ":" not in raw:
+        raise SystemExit(
+            "error: invalid dependency spec. expected '<feat-id>:<dep-id>[,<dep-id>...]'"
+        )
+    feat_id, dep_blob = raw.split(":", 1)
+    feat_id = feat_id.strip()
+    if not FEAT_ID_RE.match(feat_id):
+        raise SystemExit(f"error: invalid feat id in dependency spec: {feat_id}")
+
+    deps: list[str] = []
+    seen: set[str] = set()
+    dep_blob = dep_blob.strip()
+    if dep_blob:
+        for raw_dep in dep_blob.split(","):
+            dep = raw_dep.strip()
+            if not dep:
+                continue
+            if not FEAT_ID_RE.match(dep):
+                raise SystemExit(f"error: invalid dependency feat id: {dep}")
+            if dep == feat_id:
+                raise SystemExit(f"error: feat cannot depend on itself: {feat_id}")
+            if dep in seen:
+                continue
+            seen.add(dep)
+            deps.append(dep)
+    return feat_id, deps
+
+
+def feat_is_completed(status: str) -> bool:
+    return status in {"done", "archived"}
+
+
+def build_layered_dag(
+    feat_ids: list[str],
+    deps_by_feat: dict[str, set[str]],
+    *,
+    parallel_limit: int | None,
+) -> list[list[str]]:
+    if parallel_limit is not None and parallel_limit <= 0:
+        raise SystemExit("error: parallel_limit must be >= 1")
+
+    remaining: set[str] = set(feat_ids)
+    unresolved: dict[str, set[str]] = {
+        feat_id: set(deps_by_feat.get(feat_id, set())) for feat_id in feat_ids
+    }
+    dependents: dict[str, set[str]] = {feat_id: set() for feat_id in feat_ids}
+    for feat_id, deps in unresolved.items():
+        for dep in deps:
+            dependents.setdefault(dep, set()).add(feat_id)
+
+    layers: list[list[str]] = []
+    while remaining:
+        ready = sorted(feat_id for feat_id in remaining if not unresolved.get(feat_id, set()))
+        if not ready:
+            cycle_nodes = sorted(remaining)
+            raise SystemExit(
+                "error: dependency cycle detected among feats: " + ", ".join(cycle_nodes)
+            )
+
+        chosen = ready if parallel_limit is None else ready[:parallel_limit]
+        layers.append(chosen)
+        for feat_id in chosen:
+            remaining.remove(feat_id)
+        for feat_id in chosen:
+            for child in dependents.get(feat_id, set()):
+                if child in remaining:
+                    unresolved[child].discard(feat_id)
+
+    return layers
+
+
+def unique_dag_archive_path(paths: HarnessPaths, ts: str) -> Path:
+    stem = ts.replace("-", "").replace(":", "")
+    candidate = paths.dag_archive_dir / f"{stem}.json"
+    n = 2
+    while candidate.exists():
+        candidate = paths.dag_archive_dir / f"{stem}-{n}.json"
+        n += 1
+    return candidate
+
+
+def dag_is_complete(payload: dict[str, Any]) -> bool:
+    layers = payload.get("layers", [])
+    if not isinstance(layers, list) or not layers:
+        return True
+    for layer in layers:
+        if not isinstance(layer, dict):
+            return False
+        if not bool(layer.get("is_completed", False)):
+            return False
+    return True
+
+
+def archive_existing_dag(paths: HarnessPaths, payload: dict[str, Any]) -> Path:
+    now = utc_now()
+    archived = json.loads(json.dumps(payload, ensure_ascii=False))
+    archived["archived_at"] = now
+    archived["completed_at"] = now if dag_is_complete(payload) else None
+    target = unique_dag_archive_path(paths, now)
+    save_json(target, archived)
+    return target
+
+
+def load_non_archived_feats(paths: HarnessPaths) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    index_data = load_index(paths)
+    states: dict[str, dict[str, Any]] = {}
+    tasks_by_feat: dict[str, dict[str, Any]] = {}
+    for item in index_data.get("feats", []):
+        feat_id = str(item.get("feat_id", ""))
+        if not feat_id:
+            continue
+        status = str(item.get("status") or "")
+        if status == "archived":
+            continue
+        state, tasks = load_feat(paths, feat_id)
+        states[feat_id] = state
+        tasks_by_feat[feat_id] = tasks
+    return states, tasks_by_feat
+
+
+def cmd_replan_feats(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    paths = HarnessPaths(root)
+    ensure_harness_exists(paths)
+
+    policy = load_runtime_policy(paths)
+    dag_policy = policy.get("dag", {}) if isinstance(policy, dict) else {}
+
+    requested_mode = str(args.execution_mode or dag_policy.get("execution_mode", "auto")).strip().lower()
+    if requested_mode not in {"auto", "serial", "parallel"}:
+        eprint(f"error: invalid execution mode: {requested_mode}")
+        return 1
+
+    max_parallel = args.max_parallel if args.max_parallel is not None else int(dag_policy.get("max_parallel", 2))
+    if max_parallel < 1:
+        eprint("error: --max-parallel must be >= 1")
+        return 1
+
+    states, tasks_by_feat = load_non_archived_feats(paths)
+    feat_ids = sorted(states.keys())
+    if not feat_ids:
+        payload = {
+            "version": 1,
+            "generated_by": "bagakit-feat-task-harness",
+            "generated_at": utc_now(),
+            "execution_mode": "serial",
+            "max_parallel": max_parallel,
+            "parallel_recommendation": {
+                "recommended": False,
+                "reason": "no non-archived feats",
+                "natural_max_layer_width": 0,
+            },
+            "feats": [],
+            "layers": [],
+            "first_unfinished_layer": None,
+        }
+        archived_path: Path | None = None
+        if paths.dag_file.exists():
+            archived_path = archive_existing_dag(paths, load_json(paths.dag_file))
+        save_json(paths.dag_file, payload)
+        print(f"write: {paths.dag_file}")
+        if archived_path:
+            print(f"archive: {archived_path}")
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    clear_ids = {str(item).strip() for item in (args.clear_dependencies or []) if str(item).strip()}
+    for feat_id in clear_ids:
+        if not FEAT_ID_RE.match(feat_id):
+            eprint(f"error: invalid feat id in --clear-dependencies: {feat_id}")
+            return 1
+        if feat_id not in states:
+            eprint(f"error: feat not found (non-archived): {feat_id}")
+            return 1
+
+    set_deps: dict[str, list[str]] = {}
+    for raw in args.dependency or []:
+        feat_id, deps = parse_dependency_spec(str(raw))
+        if feat_id not in states:
+            eprint(f"error: feat not found (non-archived): {feat_id}")
+            return 1
+        set_deps[feat_id] = deps
+
+    changed_feats: set[str] = set()
+    for feat_id in clear_ids:
+        state = states[feat_id]
+        if state.get("depends_on") != []:
+            state["depends_on"] = []
+            state.setdefault("history", []).append(
+                {
+                    "at": utc_now(),
+                    "action": "dag_dependencies_updated",
+                    "detail": "depends_on=none",
+                }
+            )
+            changed_feats.add(feat_id)
+
+    for feat_id, deps in set_deps.items():
+        state = states[feat_id]
+        if state.get("depends_on") != deps:
+            state["depends_on"] = deps
+            state.setdefault("history", []).append(
+                {
+                    "at": utc_now(),
+                    "action": "dag_dependencies_updated",
+                    "detail": "depends_on=" + (",".join(deps) if deps else "none"),
+                }
+            )
+            changed_feats.add(feat_id)
+
+    for feat_id in sorted(changed_feats):
+        save_feat(paths, feat_id, states[feat_id], tasks_by_feat[feat_id])
+
+    archived_status: dict[str, str] = {}
+    for item in load_index(paths).get("feats", []):
+        fid = str(item.get("feat_id", ""))
+        if fid:
+            archived_status[fid] = str(item.get("status") or "")
+
+    notes: list[str] = []
+    deps_by_feat: dict[str, set[str]] = {}
+    for feat_id, state in states.items():
+        raw_deps = state.get("depends_on", [])
+        if not isinstance(raw_deps, list):
+            raw_deps = []
+        deps: set[str] = set()
+        for raw_dep in raw_deps:
+            dep = str(raw_dep).strip()
+            if not dep:
+                continue
+            if dep == feat_id:
+                eprint(f"error: feat cannot depend on itself: {feat_id}")
+                return 1
+            dep_status = archived_status.get(dep, "")
+            if dep_status == "archived":
+                notes.append(f"{feat_id} depends on archived feat {dep}; treated as already satisfied")
+                continue
+            if dep not in states:
+                notes.append(f"{feat_id} dependency missing from active DAG set: {dep}")
+                continue
+            deps.add(dep)
+        deps_by_feat[feat_id] = deps
+
+    natural_layers = build_layered_dag(feat_ids, deps_by_feat, parallel_limit=None)
+    natural_max_width = max((len(layer) for layer in natural_layers), default=0)
+    parallel_recommended = natural_max_width > 1
+
+    if requested_mode == "serial":
+        resolved_mode = "serial"
+    elif requested_mode == "parallel":
+        resolved_mode = "parallel"
+    else:
+        resolved_mode = "parallel" if parallel_recommended and max_parallel > 1 else "serial"
+
+    parallel_limit = max_parallel if resolved_mode == "parallel" else 1
+    layers = build_layered_dag(feat_ids, deps_by_feat, parallel_limit=parallel_limit)
+
+    layer_by_feat: dict[str, int] = {}
+    for i, layer in enumerate(layers):
+        for feat_id in layer:
+            layer_by_feat[feat_id] = i
+
+    dependents_by_feat: dict[str, list[str]] = {feat_id: [] for feat_id in feat_ids}
+    for feat_id, deps in deps_by_feat.items():
+        for dep in sorted(deps):
+            dependents_by_feat.setdefault(dep, []).append(feat_id)
+
+    layer_payload: list[dict[str, Any]] = []
+    first_unfinished: int | None = None
+    for i, layer in enumerate(layers):
+        is_completed = all(feat_is_completed(str(states[feat_id].get("status") or "")) for feat_id in layer)
+        layer_payload.append(
+            {
+                "layer": i,
+                "feat_ids": layer,
+                "is_completed": is_completed,
+            }
+        )
+        if not is_completed and first_unfinished is None:
+            first_unfinished = i
+
+    feats_payload: list[dict[str, Any]] = []
+    for feat_id in feat_ids:
+        status = str(states[feat_id].get("status") or "proposal")
+        feats_payload.append(
+            {
+                "feat_id": feat_id,
+                "title": str(states[feat_id].get("title") or ""),
+                "status": status,
+                "depends_on": sorted(deps_by_feat.get(feat_id, set())),
+                "dependents": sorted(dependents_by_feat.get(feat_id, [])),
+                "layer": layer_by_feat.get(feat_id),
+                "is_completed": feat_is_completed(status),
+            }
+        )
+
+    if parallel_recommended:
+        recommendation_reason = (
+            f"independent layer width up to {natural_max_width}; parallel mode can reduce waiting time"
+        )
+    else:
+        recommendation_reason = "dependency chain is mostly linear; serial mode is sufficient"
+
+    payload = {
+        "version": 1,
+        "generated_by": "bagakit-feat-task-harness",
+        "generated_at": utc_now(),
+        "execution_mode": resolved_mode,
+        "max_parallel": max_parallel,
+        "parallel_recommendation": {
+            "recommended": parallel_recommended,
+            "reason": recommendation_reason,
+            "natural_max_layer_width": natural_max_width,
+        },
+        "feats": feats_payload,
+        "layers": layer_payload,
+        "first_unfinished_layer": first_unfinished,
+        "notes": sorted(set(notes)),
+    }
+
+    archived_path: Path | None = None
+    if paths.dag_file.exists():
+        archived_path = archive_existing_dag(paths, load_json(paths.dag_file))
+    save_json(paths.dag_file, payload)
+
+    print(f"write: {paths.dag_file}")
+    if archived_path:
+        print(f"archive: {archived_path}")
+    print(f"execution_mode: {resolved_mode}")
+    print(f"max_parallel: {max_parallel}")
+    print(
+        "parallel_recommended: "
+        + ("yes" if parallel_recommended else "no")
+        + f" ({recommendation_reason})"
+    )
+    print(f"next: feat-task-harness.sh show-feat-dag --root {root}")
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_show_feat_dag(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    paths = HarnessPaths(root)
+    ensure_harness_exists(paths)
+    if not paths.dag_file.exists():
+        eprint(f"error: dag file missing: {paths.dag_file}")
+        eprint("hint: run feat-task-harness.sh replan-feats first")
+        return 1
+
+    payload = load_json(paths.dag_file)
+    if not isinstance(payload, dict):
+        eprint(f"error: invalid dag schema: {paths.dag_file}")
+        return 1
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    print(f"dag_file: {paths.dag_file}")
+    print(f"generated_at: {payload.get('generated_at', '')}")
+    print(f"execution_mode: {payload.get('execution_mode', '')}")
+    print(f"max_parallel: {payload.get('max_parallel', '')}")
+    rec = payload.get("parallel_recommendation", {})
+    if isinstance(rec, dict):
+        print(
+            "parallel_recommended: "
+            + ("yes" if rec.get("recommended") else "no")
+            + f" ({rec.get('reason', '')})"
+        )
+    first_unfinished = payload.get("first_unfinished_layer")
+    print(f"first_unfinished_layer: {first_unfinished if first_unfinished is not None else 'none'}")
+
+    layers = payload.get("layers", [])
+    if not isinstance(layers, list) or not layers:
+        print("layers: none")
+        return 0
+
+    print("layers:")
+    for layer in layers:
+        if not isinstance(layer, dict):
+            continue
+        layer_id = layer.get("layer")
+        feat_ids = layer.get("feat_ids", [])
+        if not isinstance(feat_ids, list):
+            feat_ids = []
+        done_flag = "done" if layer.get("is_completed") else "pending"
+        print(f"- L{layer_id} [{done_flag}] {' '.join(str(fid) for fid in feat_ids)}")
     return 0
 
 
@@ -1967,6 +2439,25 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("diagnose-harness", help="run doctor checks")
     add_common(sp)
     sp.set_defaults(func=cmd_doctor)
+
+    sp = sub.add_parser("replan-feats", help="recompute feat DAG plan and archive previous DAG")
+    add_common(sp)
+    sp.add_argument("--execution-mode", choices=["auto", "serial", "parallel"], default=None)
+    sp.add_argument("--max-parallel", type=int, default=None)
+    sp.add_argument(
+        "--dependency",
+        action="append",
+        default=[],
+        help="dependency override in '<feat-id>:<dep1>,<dep2>' format",
+    )
+    sp.add_argument("--clear-dependencies", action="append", default=[])
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_replan_feats)
+
+    sp = sub.add_parser("show-feat-dag", help="show current feat DAG")
+    add_common(sp)
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_show_feat_dag)
 
     sp = sub.add_parser("list-feats", help="query feats list")
     add_common(sp)

@@ -79,7 +79,18 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" initialize-harness --r
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "<feat-title>" --slug "<feat-slug>" --goal "<goal>"
 ```
 
-4) Execute task loop
+4) Replan feat DAG (optional parallel mode)
+
+```bash
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" replan-feats --root . --execution-mode auto --max-parallel 2
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" show-feat-dag --root .
+```
+
+DAG snapshots:
+- current: `.bagakit/ft-harness/index/FEATS_DAG.json`
+- archive per replan: `.bagakit/ft-harness/index/archive/<ts>.json`
+
+5) Execute task loop
 
 ```bash
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" start-task --root . --feat <feat-id> --task T-001
@@ -106,7 +117,7 @@ Guardrails:
 - feat worktree must be clean before archive
 - archive fails if stale worktree registration remains after cleanup
 
-6) Validate and diagnose
+7) Validate and diagnose
 
 ```bash
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" validate-harness --root .
@@ -127,6 +138,8 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" diagnose-harness --roo
 - `feat-task-harness.sh archive-feat`
 - `feat-task-harness.sh validate-harness`
 - `feat-task-harness.sh diagnose-harness`
+- `feat-task-harness.sh replan-feats`
+- `feat-task-harness.sh show-feat-dag`
 - `feat-task-harness.sh list-feats`
 - `feat-task-harness.sh get-feat`
 - `feat-task-harness.sh filter-feats`
@@ -137,11 +150,18 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" diagnose-harness --roo
 
 Runtime state is stored under `.bagakit/ft-harness/`:
 - `.bagakit/ft-harness/index/feats.json`
+- `.bagakit/ft-harness/index/FEATS_DAG.json` (current dag plan)
+- `.bagakit/ft-harness/index/archive/<ts>.json` (dag snapshots)
+- `.bagakit/ft-harness/runtime-policy.json` (required)
 - `.bagakit/ft-harness/feats/<feat-id>/state.json` (active)
 - `.bagakit/ft-harness/feats-archived/<feat-id>/state.json` (archived)
 - `.bagakit/ft-harness/feats*/<feat-id>/tasks.json`
 
 Markdown files (`proposal.md`, `tasks.md`, `spec-deltas/*.md`) are human-readable views.
+
+Version policy:
+- no backward compatibility shims for old runtime schema/files
+- old projects must migrate manually by comparing this SKILL.md and updating local runtime files
 
 ## Commit Protocol
 
@@ -166,7 +186,7 @@ Required trailers:
 
 - UI projects: require browser-verification evidence file (`ui-verification.md`) and optional commands.
 - Non-UI projects: run configured test command(s); at least one command must execute successfully.
-- `project_type=auto` is rule-driven via `gate.project_type_rules` in `.bagakit/ft-harness/config.json`.
+- `project_type=auto` is rule-driven via `gate.project_type_rules` in `.bagakit/ft-harness/runtime-policy.json`.
 
 Gate outcomes are written into task/state JSON and used by doctor thresholds.
 

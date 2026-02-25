@@ -5,6 +5,10 @@ dev_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_root="$(cd "${dev_script_dir}/.." && pwd)"
 runtime_scripts_dir="${skill_root}/scripts"
 harness_cli="${runtime_scripts_dir}/feat-task-harness.sh"
+skill_maker_cmd="${skill_root}/../bagakit-skill-maker/scripts/bagakit_skill_maker.sh"
+
+echo "[test] runtime hard gates"
+sh "${skill_maker_cmd}" runtime-gate --skill-dir "${skill_root}" >/dev/null
 
 tmp="$(mktemp -d -t bagakit-ft-harness.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
@@ -142,14 +146,33 @@ bash "$harness_cli" check-reference-readiness --root "$project"
 echo "[test] apply harness"
 bash "$harness_cli" initialize-harness --root "$project"
 
-echo "[test] create feat"
-feat_out="$(bash "$harness_cli" create-feat --root "$project" --title "Demo Feat" --slug "demo-feat" --goal "Validate full loop")"
-echo "$feat_out"
-feat_id="$(printf '%s\n' "$feat_out" | awk -F': ' '/^feat_id:/ {print $2}')"
-worktree_path="$(printf '%s\n' "$feat_out" | awk -F': ' '/^worktree:/ {print $2}')"
+if [[ ! -f "$project/.bagakit/ft-harness/runtime-policy.json" ]]; then
+  echo "[test] runtime-policy.json was not generated" >&2
+  exit 1
+fi
+if [[ ! -f "$project/.bagakit/ft-harness/index/FEATS_DAG.json" ]]; then
+  echo "[test] FEATS_DAG.json was not generated" >&2
+  exit 1
+fi
+
+echo "[test] create feat-1"
+feat1_out="$(bash "$harness_cli" create-feat --root "$project" --title "Demo Feat 1" --slug "demo-feat-1" --goal "Validate full loop")"
+echo "$feat1_out"
+feat_id="$(printf '%s\n' "$feat1_out" | awk -F': ' '/^feat_id:/ {print $2}')"
+worktree_path="$(printf '%s\n' "$feat1_out" | awk -F': ' '/^worktree:/ {print $2}')"
 
 if [[ -z "$feat_id" || -z "$worktree_path" ]]; then
   echo "[test] failed to parse feat_id/worktree" >&2
+  exit 1
+fi
+
+echo "[test] create feat-2"
+feat2_out="$(bash "$harness_cli" create-feat --root "$project" --title "Demo Feat 2" --slug "demo-feat-2" --goal "Validate DAG replanning")"
+echo "$feat2_out"
+feat2_id="$(printf '%s\n' "$feat2_out" | awk -F': ' '/^feat_id:/ {print $2}')"
+
+if [[ -z "$feat2_id" ]]; then
+  echo "[test] failed to parse feat2_id" >&2
   exit 1
 fi
 
@@ -157,12 +180,27 @@ echo "[test] configure non-ui gate command"
 python3 - <<PY
 import json
 from pathlib import Path
-p = Path(r"$project") / ".bagakit" / "ft-harness" / "config.json"
+p = Path(r"$project") / ".bagakit" / "ft-harness" / "runtime-policy.json"
 data = json.loads(p.read_text())
 data["gate"]["project_type"] = "non_ui"
 data["gate"]["non_ui_commands"] = ["bash -lc 'true'"]
 p.write_text(json.dumps(data, indent=2) + "\n")
 PY
+
+echo "[test] replan DAG with dependency"
+bash "$harness_cli" replan-feats --root "$project" --execution-mode parallel --max-parallel 2 --dependency "${feat2_id}:${feat_id}"
+bash "$harness_cli" show-feat-dag --root "$project" --json >/dev/null
+
+echo "[test] replan DAG archive snapshot"
+bash "$harness_cli" replan-feats --root "$project" --execution-mode auto --max-parallel 2 --clear-dependencies "$feat2_id"
+if [[ ! -d "$project/.bagakit/ft-harness/index/archive" ]]; then
+  echo "[test] DAG archive directory missing" >&2
+  exit 1
+fi
+if [[ -z "$(find "$project/.bagakit/ft-harness/index/archive" -type f -name '*.json' -print -quit)" ]]; then
+  echo "[test] expected at least one archived DAG snapshot" >&2
+  exit 1
+fi
 
 echo "[test] task loop"
 bash "$harness_cli" start-task --root "$project" --feat "$feat_id" --task T-001
@@ -216,6 +254,16 @@ if git -C "$project" show-ref --verify --quiet "refs/heads/feat/$feat_id"; then
   echo "[test] feat branch still exists after archive" >&2
   exit 1
 fi
+
+echo "[test] legacy config is rejected"
+cp "$project/.bagakit/ft-harness/runtime-policy.json" "$project/.bagakit/ft-harness/config.json"
+rm -f "$project/.bagakit/ft-harness/runtime-policy.json"
+if bash "$harness_cli" validate-harness --root "$project" >/dev/null 2>&1; then
+  echo "[test] expected validate-harness to fail without runtime-policy.json" >&2
+  exit 1
+fi
+cp "$project/.bagakit/ft-harness/config.json" "$project/.bagakit/ft-harness/runtime-policy.json"
+rm -f "$project/.bagakit/ft-harness/config.json"
 
 echo "[test] validate + doctor"
 bash "$harness_cli" validate-harness --root "$project"

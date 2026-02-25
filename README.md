@@ -46,6 +46,30 @@ BAGAKIT_REFERENCE_SKILLS_HOME="${BAGAKIT_REFERENCE_SKILLS_HOME:-$HOME/.bagakit/s
 
 When `--strict` is enabled, pass the same manifest to `initialize-harness` / `create-feat`.
 
+Runtime policy file:
+- required: `.bagakit/ft-harness/runtime-policy.json`
+
+Version policy:
+- no backward compatibility shims for old runtime schema/files
+- old projects must migrate manually by comparing `SKILL.md` and updating local runtime layout
+
+## Feat DAG planning
+
+```bash
+# Recompute DAG and archive previous plan snapshot
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" replan-feats --root . --execution-mode auto --max-parallel 2
+
+# Optional dependency override: <feat-id>:<dep1>,<dep2>
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" replan-feats --root . --dependency "<feat-id>:<dep-id>"
+
+# Show current DAG
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" show-feat-dag --root .
+```
+
+DAG files:
+- current: `.bagakit/ft-harness/index/FEATS_DAG.json`
+- history snapshots: `.bagakit/ft-harness/index/archive/<ts>.json`
+
 ## Core loop
 
 ```bash

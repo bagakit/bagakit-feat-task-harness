@@ -28,3 +28,15 @@ sop:
 ## Enforced By
 
 - `scripts_dev/test.sh` audits the default manifest and the optional OpenSpec manifest contract.
+
+## Runtime Policy Naming
+
+- Required runtime policy file is `.bagakit/ft-harness/runtime-policy.json`.
+- Backward compatibility for legacy `.bagakit/ft-harness/config.json` is intentionally disabled.
+- Existing projects must migrate manually by comparing current `SKILL.md` and updating local runtime files.
+
+## Feat DAG Snapshot Contract
+
+- Current DAG SSOT lives at `.bagakit/ft-harness/index/FEATS_DAG.json`.
+- Every explicit replan must archive the previous DAG snapshot to:
+  - `.bagakit/ft-harness/index/archive/<ts>.json`
