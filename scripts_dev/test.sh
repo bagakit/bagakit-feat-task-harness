@@ -5,7 +5,7 @@ dev_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_root="$(cd "${dev_script_dir}/.." && pwd)"
 runtime_scripts_dir="${skill_root}/scripts"
 harness_cli="${runtime_scripts_dir}/feat-task-harness.sh"
-skill_maker_cmd="${skill_root}/../bagakit-skill-maker/scripts/bagakit_skill_maker.sh"
+skill_maker_cmd="${skill_root}/../bagakit-skill-maker/scripts/bagakit-skill-maker.sh"
 
 echo "[test] runtime hard gates"
 sh "${skill_maker_cmd}" runtime-gate --skill-dir "${skill_root}" >/dev/null
@@ -155,19 +155,37 @@ if [[ ! -f "$project/.bagakit/ft-harness/index/FEATS_DAG.json" ]]; then
   exit 1
 fi
 
+echo "[test] configure runtime policy"
+python3 - <<PY
+import json
+from pathlib import Path
+p = Path(r"$project") / ".bagakit" / "ft-harness" / "runtime-policy.json"
+data = json.loads(p.read_text())
+data["git"]["branch_prefix"] = "codex/"
+data["workspace"]["default_mode"] = "worktree"
+data["gate"]["project_type"] = "non_ui"
+data["gate"]["non_ui_commands"] = ["bash -lc 'true'"]
+p.write_text(json.dumps(data, indent=2) + "\n")
+PY
+
 echo "[test] create feat-1"
 feat1_out="$(bash "$harness_cli" create-feat --root "$project" --title "Demo Feat 1" --slug "demo-feat-1" --goal "Validate full loop")"
 echo "$feat1_out"
 feat_id="$(printf '%s\n' "$feat1_out" | awk -F': ' '/^feat_id:/ {print $2}')"
 worktree_path="$(printf '%s\n' "$feat1_out" | awk -F': ' '/^worktree:/ {print $2}')"
+branch_name="$(printf '%s\n' "$feat1_out" | awk -F': ' '/^branch:/ {print $2}')"
 
-if [[ -z "$feat_id" || -z "$worktree_path" ]]; then
-  echo "[test] failed to parse feat_id/worktree" >&2
+if [[ -z "$feat_id" || -z "$worktree_path" || -z "$branch_name" ]]; then
+  echo "[test] failed to parse feat1 outputs" >&2
+  exit 1
+fi
+if [[ "$branch_name" != codex/* ]]; then
+  echo "[test] expected branch prefix codex/, got: $branch_name" >&2
   exit 1
 fi
 
-echo "[test] create feat-2"
-feat2_out="$(bash "$harness_cli" create-feat --root "$project" --title "Demo Feat 2" --slug "demo-feat-2" --goal "Validate DAG replanning")"
+echo "[test] create feat-2 (current_tree)"
+feat2_out="$(bash "$harness_cli" create-feat --root "$project" --workspace-mode current_tree --title "Demo Feat 2" --slug "demo-feat-2" --goal "Validate current-tree execution")"
 echo "$feat2_out"
 feat2_id="$(printf '%s\n' "$feat2_out" | awk -F': ' '/^feat_id:/ {print $2}')"
 
@@ -176,15 +194,54 @@ if [[ -z "$feat2_id" ]]; then
   exit 1
 fi
 
-echo "[test] configure non-ui gate command"
 python3 - <<PY
 import json
 from pathlib import Path
-p = Path(r"$project") / ".bagakit" / "ft-harness" / "runtime-policy.json"
+p = Path(r"$project") / ".bagakit" / "ft-harness" / "feats" / r"$feat2_id" / "state.json"
 data = json.loads(p.read_text())
-data["gate"]["project_type"] = "non_ui"
-data["gate"]["non_ui_commands"] = ["bash -lc 'true'"]
-p.write_text(json.dumps(data, indent=2) + "\n")
+assert data["workspace_mode"] == "current_tree", data
+assert data["branch"] == "", data
+assert data["worktree_path"] == "", data
+PY
+
+echo "[test] create feat-3 (proposal_only)"
+feat3_out="$(bash "$harness_cli" create-feat --root "$project" --workspace-mode proposal_only --title "Demo Feat 3" --slug "demo-feat-3" --goal "Validate proposal-only flow")"
+echo "$feat3_out"
+feat3_id="$(printf '%s\n' "$feat3_out" | awk -F': ' '/^feat_id:/ {print $2}')"
+
+if [[ -z "$feat3_id" ]]; then
+  echo "[test] failed to parse feat3_id" >&2
+  exit 1
+fi
+
+echo "[test] proposal_only blocks task start"
+if bash "$harness_cli" start-task --root "$project" --feat "$feat3_id" --task T-001 >/dev/null 2>&1; then
+  echo "[test] expected proposal_only feat to reject start-task" >&2
+  exit 1
+fi
+
+echo "[test] assign worktree to proposal_only feat"
+assign_out="$(bash "$harness_cli" assign-feat-workspace --root "$project" --feat "$feat3_id" --workspace-mode worktree)"
+echo "$assign_out"
+feat3_branch="$(printf '%s\n' "$assign_out" | awk -F': ' '/^branch:/ {print $2}')"
+feat3_worktree="$(printf '%s\n' "$assign_out" | awk -F': ' '/^worktree:/ {print $2}')"
+if [[ -z "$feat3_branch" || -z "$feat3_worktree" ]]; then
+  echo "[test] failed to parse feat3 workspace assignment" >&2
+  exit 1
+fi
+if [[ "$feat3_branch" != codex/* ]]; then
+  echo "[test] expected assigned branch prefix codex/, got: $feat3_branch" >&2
+  exit 1
+fi
+
+python3 - <<PY
+import json
+from pathlib import Path
+p = Path(r"$project") / ".bagakit" / "ft-harness" / "feats" / r"$feat3_id" / "state.json"
+data = json.loads(p.read_text())
+assert data["workspace_mode"] == "worktree", data
+assert data["branch"].startswith("codex/"), data
+assert data["worktree_path"], data
 PY
 
 echo "[test] replan DAG with dependency"
@@ -228,7 +285,7 @@ bash "$harness_cli" finish-task --root "$project" --feat "$feat_id" --task T-001
 
 echo "[test] merge feat branch into base branch"
 pushd "$project" >/dev/null
-git merge --no-ff -m "merge ${feat_id}" "feat/${feat_id}"
+git merge --no-ff -m "merge ${feat_id}" "$branch_name"
 popd >/dev/null
 
 echo "[test] archive feat + cleanup worktree"
@@ -250,7 +307,7 @@ if git -C "$project" worktree list --porcelain | grep -q "worktree $worktree_pat
   echo "[test] worktree registry still contains archived worktree path" >&2
   exit 1
 fi
-if git -C "$project" show-ref --verify --quiet "refs/heads/feat/$feat_id"; then
+if git -C "$project" show-ref --verify --quiet "refs/heads/$branch_name"; then
   echo "[test] feat branch still exists after archive" >&2
   exit 1
 fi

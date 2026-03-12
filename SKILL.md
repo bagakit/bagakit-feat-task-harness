@@ -1,6 +1,6 @@
 ---
 name: bagakit-feat-task-harness
-description: Build and run a feat/task long-running harness with per-feat worktree isolation, JSON SSOT transitions, strict task-level commit protocol, physical feat archive, and optional adapter contracts. Use when engineering delivery needs deterministic orchestration and traceability.
+description: Build and run a feat/task long-running harness with explicit workspace modes, JSON SSOT transitions, strict task-level commit protocol, physical feat archive, and optional adapter contracts. Use when engineering delivery needs deterministic orchestration and traceability.
 ---
 
 # Bagakit Feat Task Harness
@@ -14,7 +14,7 @@ description: Build and run a feat/task long-running harness with per-feat worktr
 ## When to Use
 
 - You need deterministic feat/task lifecycle with strict JSON SSOT.
-- You need one isolated worktree per feat and explicit archive cleanup.
+- You need explicit feat workspace control (`worktree` / `current_tree` / `proposal_only`) and archive cleanup.
 - You need structured commit protocol and gate evidence for long-running delivery.
 
 ## When NOT to Use
@@ -29,7 +29,7 @@ Use this skill for long-running engineering work that needs deterministic orches
 
 This skill enforces:
 - two-level planning (`feat` -> `task`)
-- one worktree per feat (`.worktrees/`)
+- explicit workspace mode per feat
 - JSON single source of truth (SSOT)
 - task-level structured commits (`Plan/Check/Learn` + trailers)
 - script-driven transitions only (no manual state edits)
@@ -70,10 +70,23 @@ Standalone policy for ref-read:
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" initialize-harness --root .
 ```
 
-3) Create feat (+ branch + worktree)
+3) Create feat (+ explicit workspace mode)
 
 ```bash
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "<feat-title>" --slug "<feat-slug>" --goal "<goal>"
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "<feat-title>" --slug "<feat-slug>" --goal "<goal>" --workspace-mode worktree
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "<feat-title>" --slug "<feat-slug>" --goal "<goal>" --workspace-mode current_tree
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "<feat-title>" --slug "<feat-slug>" --goal "<goal>" --workspace-mode proposal_only
+```
+
+Runtime policy controls:
+- `git.branch_prefix` for worktree-mode branches (for example `codex/`)
+- `workspace.default_mode` for default feat workspace mode
+
+`proposal_only` must be assigned before execution:
+
+```bash
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" assign-feat-workspace --root . --feat <feat-id> --workspace-mode current_tree
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" assign-feat-workspace --root . --feat <feat-id> --workspace-mode worktree
 ```
 
 4) Replan feat DAG (optional parallel mode)
@@ -105,14 +118,14 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" archive-feat --root . 
 
 Archive semantics are physical + cleanup:
 - move feat runtime dir into `feats-archived/`
-- remove feat worktree + prune worktree registry
-- delete feat branch when merged
+- remove feat worktree + prune worktree registry (`worktree` mode only)
+- delete feat branch when merged (`worktree` mode only)
 - set feat status to `archived`
 
 Guardrails:
-- `done` feat must be merged before archive
-- feat worktree must be clean before archive
-- archive fails if stale worktree registration remains after cleanup
+- `done` feat in `worktree` mode must be merged before archive
+- feat worktree must be clean before archive (`worktree` mode only)
+- archive fails if stale worktree registration remains after cleanup (`worktree` mode only)
 
 7) Validate and diagnose
 
@@ -127,6 +140,7 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" diagnose-harness --roo
 - `feat-task-harness.sh validate-reference-report`
 - `feat-task-harness.sh initialize-harness`
 - `feat-task-harness.sh create-feat`
+- `feat-task-harness.sh assign-feat-workspace`
 - `feat-task-harness.sh show-feat-status`
 - `feat-task-harness.sh start-task`
 - `feat-task-harness.sh run-task-gate`
@@ -150,7 +164,7 @@ Runtime state is stored under `.bagakit/ft-harness/`:
 - `.bagakit/ft-harness/index/FEATS_DAG.json` (current dag plan)
 - `.bagakit/ft-harness/index/archive/<ts>.json` (dag snapshots)
 - `.bagakit/ft-harness/runtime-policy.json` (required)
-- `.bagakit/ft-harness/feats/<feat-id>/state.json` (active)
+- `.bagakit/ft-harness/feats/<feat-id>/state.json` (active; includes `workspace_mode`)
 - `.bagakit/ft-harness/feats-archived/<feat-id>/state.json` (archived)
 - `.bagakit/ft-harness/feats*/<feat-id>/tasks.json`
 

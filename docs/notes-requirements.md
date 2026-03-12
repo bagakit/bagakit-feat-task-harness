@@ -34,6 +34,16 @@ sop:
 - Required runtime policy file is `.bagakit/ft-harness/runtime-policy.json`.
 - Backward compatibility for legacy `.bagakit/ft-harness/config.json` is intentionally disabled.
 - Existing projects must migrate manually by comparing current `SKILL.md` and updating local runtime files.
+- Runtime policy must define the final-version workspace contract:
+  - `git.branch_prefix` for dedicated feat branches
+  - `workspace.default_mode` in `worktree|current_tree|proposal_only`
+
+## Workspace Contract
+
+- Every feat state must declare `workspace_mode`.
+- `worktree` mode owns a dedicated branch + `.worktrees/` entry.
+- `current_tree` mode runs in the repository root and must not track dedicated worktree fields.
+- `proposal_only` is planning-only and must be assigned before `start-task`.
 
 ## Feat DAG Snapshot Contract
 

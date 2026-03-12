@@ -2,7 +2,7 @@
 
 A Bagakit skill for multi-session feat/task orchestration with:
 
-- one worktree per feat (`.worktrees/`)
+- explicit feat workspace modes (`worktree`, `current_tree`, `proposal_only`)
 - JSON SSOT state machine
 - task-level structured commit protocol
 - physical archive (`feats-archived/`) on feat close
@@ -50,6 +50,8 @@ When `--strict` is enabled, pass the same manifest to `initialize-harness` / `cr
 
 Runtime policy file:
 - required: `.bagakit/ft-harness/runtime-policy.json`
+- `git.branch_prefix` controls worktree-mode branch names
+- `workspace.default_mode` controls default feat workspace mode
 
 Version policy:
 - no backward compatibility shims for old runtime schema/files
@@ -75,8 +77,13 @@ DAG files:
 ## Core loop
 
 ```bash
-# Create feat + worktree
-bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "Add feature" --slug "add-feature" --goal "Deliver X"
+# Create feat in explicit workspace mode
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "Add feature" --slug "add-feature" --goal "Deliver X" --workspace-mode worktree
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "Dirty tree follow-up" --slug "dirty-tree-follow-up" --goal "Continue current branch work" --workspace-mode current_tree
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "Plan only" --slug "plan-only" --goal "Register proposal first" --workspace-mode proposal_only
+
+# Assign workspace later for proposal_only feats
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" assign-feat-workspace --root . --feat <feat-id> --workspace-mode current_tree
 
 # Task execution
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" start-task --root . --feat <feat-id> --task T-001
@@ -95,13 +102,13 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" archive-feat --root . 
 `archive-feat` performs final-state archive actions:
 - set status to `archived`
 - move `.bagakit/ft-harness/feats/<feat-id>` -> `.bagakit/ft-harness/feats-archived/<feat-id>`
-- remove feat worktree directory + `git worktree prune`
-- delete feat branch when merged into base branch
+- remove feat worktree directory + `git worktree prune` (`worktree` mode only)
+- delete feat branch when merged into base branch (`worktree` mode only)
 
 Guardrails:
-- if feat status is `done`, the feat branch must already be merged into base branch
-- worktree must be clean (no uncommitted changes)
-- archive fails if stale worktree registration still exists after cleanup
+- if feat status is `done` in `worktree` mode, the feat branch must already be merged into base branch
+- worktree must be clean (no uncommitted changes, `worktree` mode only)
+- archive fails if stale worktree registration still exists after cleanup (`worktree` mode only)
 
 ## Validate / diagnose / query
 

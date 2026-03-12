@@ -24,6 +24,7 @@ TASK_ID_RE = re.compile(r"^T-\d{3}$")
 FEAT_STATUS = {"proposal", "ready", "in_progress", "blocked", "done", "archived"}
 TASK_STATUS = {"todo", "in_progress", "done", "blocked"}
 GATE_STATUS = {"pass", "fail"}
+WORKSPACE_MODES = {"worktree", "current_tree", "proposal_only"}
 UNRESOLVED_ENV_RE = re.compile(r"\$\{?[A-Za-z_][A-Za-z0-9_]*")
 REFERENCE_SKILLS_ENV = "BAGAKIT_REFERENCE_SKILLS_HOME"
 RUNTIME_POLICY_FILENAME = "runtime-policy.json"
@@ -116,6 +117,14 @@ def ensure_git_repo(root: Path) -> None:
 def command_exists(name: str) -> bool:
     cp = run_cmd(["bash", "-lc", f"command -v {shlex.quote(name)} >/dev/null 2>&1"])
     return cp.returncode == 0
+
+
+def current_branch(root: Path) -> str:
+    cp = run_cmd(["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"])
+    if cp.returncode != 0:
+        return ""
+    branch = cp.stdout.strip()
+    return "" if branch == "HEAD" else branch
 
 
 def slugify(value: str) -> str:
@@ -241,6 +250,70 @@ def ensure_runtime_policy(paths: HarnessPaths, skill_dir: Path) -> Path:
     return paths.runtime_policy_file
 
 
+def resolve_workspace_mode(policy: dict[str, Any], requested: str | None) -> str:
+    workspace_cfg = policy.get("workspace", {}) if isinstance(policy, dict) else {}
+    raw = str(requested or workspace_cfg.get("default_mode", "worktree")).strip().lower()
+    if raw not in WORKSPACE_MODES:
+        raise SystemExit(
+            "error: invalid workspace mode: "
+            f"{raw}. expected one of {', '.join(sorted(WORKSPACE_MODES))}"
+        )
+    return raw
+
+
+def resolve_branch_prefix(policy: dict[str, Any], requested: str | None) -> str:
+    git_cfg = policy.get("git", {}) if isinstance(policy, dict) else {}
+    raw = str(requested if requested is not None else git_cfg.get("branch_prefix", "feat/")).strip()
+    if not raw:
+        raise SystemExit("error: branch prefix must not be empty")
+    return raw
+
+
+def workspace_mode_of(state: dict[str, Any]) -> str:
+    raw = str(state.get("workspace_mode") or "").strip().lower()
+    if raw not in WORKSPACE_MODES:
+        raise SystemExit(
+            "error: invalid or missing workspace_mode in feat state: "
+            f"{state.get('feat_id', '<unknown>')}"
+        )
+    return raw
+
+
+def make_worktree_assignment(
+    root: Path,
+    *,
+    feat_id: str,
+    branch_prefix: str,
+) -> tuple[str, str, str, Path, str]:
+    branch = f"{branch_prefix}{feat_id}"
+    wt_name = f"wt-{feat_id}"
+    wt_rel = str(Path(".worktrees") / wt_name)
+    wt_abs = root / wt_rel
+    base_ref = pick_base_branch(root)
+
+    ensure_worktrees_ignored(root)
+    (root / ".worktrees").mkdir(parents=True, exist_ok=True)
+
+    cp = run_cmd(
+        [
+            "git",
+            "-C",
+            str(root),
+            "worktree",
+            "add",
+            str(wt_abs),
+            "-b",
+            branch,
+            base_ref,
+        ]
+    )
+    if cp.returncode != 0:
+        err = cp.stderr.strip() or cp.stdout.strip() or "failed to create worktree"
+        raise SystemExit(f"error: {err}")
+
+    return branch, wt_name, wt_rel, wt_abs, base_ref
+
+
 def get_feat_index_entry(index_data: dict[str, Any], feat_id: str) -> dict[str, Any] | None:
     for item in index_data.get("feats", []):
         if item.get("feat_id") == feat_id:
@@ -255,6 +328,7 @@ def upsert_feat_index(paths: HarnessPaths, state: dict[str, Any]) -> None:
         "feat_id": state["feat_id"],
         "title": state.get("title", ""),
         "status": state.get("status", "proposal"),
+        "workspace_mode": state.get("workspace_mode", ""),
         "branch": state.get("branch", ""),
         "worktree_name": state.get("worktree_name", ""),
         "updated_at": state.get("updated_at", utc_now()),
@@ -777,38 +851,32 @@ def cmd_feat_new(args: argparse.Namespace) -> int:
         eprint(f"error: generated invalid feat id: {feat_id}")
         return 1
 
+    policy = load_runtime_policy(paths)
+    workspace_mode = resolve_workspace_mode(policy, args.workspace_mode)
+    branch_prefix = resolve_branch_prefix(policy, args.branch_prefix)
+    base_ref = pick_base_branch(root)
+    root_branch = current_branch(root)
+    branch = ""
+    wt_name = ""
+    wt_rel = ""
+    wt_abs: Path | None = None
+
+    if workspace_mode == "worktree":
+        try:
+            branch, wt_name, wt_rel, wt_abs, base_ref = make_worktree_assignment(
+                root,
+                feat_id=feat_id,
+                branch_prefix=branch_prefix,
+            )
+        except SystemExit as exc:
+            eprint(str(exc))
+            return 1
+
     feat_dir = paths.feat_dir(feat_id)
     feat_dir.mkdir(parents=True, exist_ok=False)
     (feat_dir / "spec-deltas").mkdir(parents=True, exist_ok=True)
     (feat_dir / "artifacts").mkdir(parents=True, exist_ok=True)
     (feat_dir / "gate").mkdir(parents=True, exist_ok=True)
-
-    branch = f"feat/{feat_id}"
-    wt_name = f"wt-{feat_id}"
-    wt_rel = Path(".worktrees") / wt_name
-    wt_abs = root / wt_rel
-
-    ensure_worktrees_ignored(root)
-    (root / ".worktrees").mkdir(parents=True, exist_ok=True)
-    base_ref = pick_base_branch(root)
-
-    cp = run_cmd(
-        [
-            "git",
-            "-C",
-            str(root),
-            "worktree",
-            "add",
-            str(wt_abs),
-            "-b",
-            branch,
-            base_ref,
-        ]
-    )
-    if cp.returncode != 0:
-        eprint(cp.stderr.strip() or cp.stdout.strip())
-        eprint("error: failed to create worktree")
-        return 1
 
     proposal = load_template(skill_dir, "tpl/feat-proposal-template.md")
     proposal = (
@@ -830,10 +898,11 @@ def cmd_feat_new(args: argparse.Namespace) -> int:
         "slug": slug,
         "goal": goal,
         "status": "proposal",
+        "workspace_mode": workspace_mode,
         "base_ref": base_ref,
         "branch": branch,
         "worktree_name": wt_name,
-        "worktree_path": str(wt_rel),
+        "worktree_path": wt_rel,
         "created_at": utc_now(),
         "updated_at": utc_now(),
         "current_task_id": None,
@@ -853,7 +922,10 @@ def cmd_feat_new(args: argparse.Namespace) -> int:
             {
                 "at": utc_now(),
                 "action": "feat_created",
-                "detail": f"base_ref={base_ref}",
+                "detail": (
+                    f"workspace_mode={workspace_mode}; base_ref={base_ref}; "
+                    f"root_branch={root_branch or 'detached'}"
+                ),
             }
         ],
     }
@@ -888,9 +960,80 @@ def cmd_feat_new(args: argparse.Namespace) -> int:
 
     print(f"write: {feat_dir / 'state.json'}")
     print(f"write: {feat_dir / 'tasks.json'}")
-    print(f"worktree: {wt_abs}")
+    print(f"workspace_mode: {workspace_mode}")
     print(f"branch: {branch}")
+    print(f"worktree: {wt_abs if wt_abs is not None else ''}")
     print(f"feat_id: {feat_id}")
+    return 0
+
+
+def cmd_assign_feat_workspace(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    paths = HarnessPaths(root)
+    ensure_harness_exists(paths)
+    ensure_git_repo(root)
+
+    state, tasks = load_feat(paths, args.feat)
+    if str(state.get("status") or "") == "archived":
+        eprint(f"error: cannot assign workspace for archived feat: {args.feat}")
+        return 1
+
+    current_mode = workspace_mode_of(state)
+    if current_mode == "worktree" or str(state.get("worktree_path") or "").strip():
+        eprint(
+            f"error: feat already has worktree assignment: {args.feat}. "
+            "manual cleanup is required before reassigning."
+        )
+        return 1
+
+    policy = load_runtime_policy(paths)
+    target_mode = resolve_workspace_mode(policy, args.workspace_mode)
+    if target_mode == "proposal_only":
+        eprint("error: assign-feat-workspace only supports worktree or current_tree")
+        return 1
+    if target_mode == current_mode:
+        print(f"ok: workspace already assigned {args.feat} => {target_mode}")
+        return 0
+
+    branch = ""
+    wt_name = ""
+    wt_rel = ""
+    wt_abs: Path | None = None
+    base_ref = str(state.get("base_ref") or pick_base_branch(root))
+
+    if target_mode == "worktree":
+        branch_prefix = resolve_branch_prefix(policy, args.branch_prefix)
+        try:
+            branch, wt_name, wt_rel, wt_abs, base_ref = make_worktree_assignment(
+                root,
+                feat_id=args.feat,
+                branch_prefix=branch_prefix,
+            )
+        except SystemExit as exc:
+            eprint(str(exc))
+            return 1
+
+    state["workspace_mode"] = target_mode
+    state["base_ref"] = base_ref
+    state["branch"] = branch
+    state["worktree_name"] = wt_name
+    state["worktree_path"] = wt_rel
+    state.setdefault("history", []).append(
+        {
+            "at": utc_now(),
+            "action": "workspace_assigned",
+            "detail": (
+                f"{current_mode} -> {target_mode}; root_branch={current_branch(root) or 'detached'}"
+                if current_mode != target_mode
+                else f"{target_mode}; root_branch={current_branch(root) or 'detached'}"
+            ),
+        }
+    )
+    save_feat(paths, args.feat, state, tasks)
+
+    print(f"ok: workspace assigned {args.feat} => {target_mode}")
+    print(f"branch: {branch}")
+    print(f"worktree: {wt_abs if wt_abs is not None else ''}")
     return 0
 
 
@@ -913,6 +1056,7 @@ def cmd_feat_status(args: argparse.Namespace) -> int:
         print(f"feat_id: {state['feat_id']}")
         print(f"title: {state.get('title', '')}")
         print(f"status: {state.get('status', '')}")
+        print(f"workspace_mode: {state.get('workspace_mode', '')}")
         print(f"branch: {state.get('branch', '')}")
         print(f"worktree: {state.get('worktree_path', '')}")
         print(f"current_task: {state.get('current_task_id')}")
@@ -933,10 +1077,10 @@ def cmd_feat_status(args: argparse.Namespace) -> int:
         print("no feats")
         return 0
 
-    print("feat_id\tstatus\ttitle\tbranch\tupdated_at")
+    print("feat_id\tstatus\tworkspace\ttitle\tbranch\tupdated_at")
     for item in feats:
         print(
-            f"{item.get('feat_id','')}\t{item.get('status','')}\t"
+            f"{item.get('feat_id','')}\t{item.get('status','')}\t{item.get('workspace_mode','')}\t"
             f"{item.get('title','')}\t{item.get('branch','')}\t{item.get('updated_at','')}"
         )
     return 0
@@ -947,6 +1091,13 @@ def cmd_task_start(args: argparse.Namespace) -> int:
     paths = HarnessPaths(root)
     ensure_harness_exists(paths)
     state, tasks = load_feat(paths, args.feat)
+    workspace_mode = workspace_mode_of(state)
+    if workspace_mode == "proposal_only":
+        eprint(
+            f"error: feat {args.feat} is proposal_only; "
+            "assign a workspace first with feat-task-harness.sh assign-feat-workspace"
+        )
+        return 1
 
     task_id = args.task
     if not TASK_ID_RE.match(task_id):
@@ -1380,6 +1531,7 @@ def cmd_task_finish(args: argparse.Namespace) -> int:
 
 def render_summary(state: dict[str, Any], tasks: dict[str, Any]) -> str:
     feat_id = state["feat_id"]
+    workspace_mode = state.get("workspace_mode", "")
     todo = count_tasks(tasks, "todo")
     in_prog = count_tasks(tasks, "in_progress")
     done = count_tasks(tasks, "done")
@@ -1395,6 +1547,7 @@ def render_summary(state: dict[str, Any], tasks: dict[str, Any]) -> str:
             f"- Goal: {state.get('goal', '')}",
             f"- Final Status: {state.get('status', '')}",
             f"- Closed From Status: {state.get('closed_from_status', '')}",
+            f"- Workspace Mode: {workspace_mode}",
             f"- Base Ref: {state.get('base_ref', '')}",
             f"- Branch: {state.get('branch', '')}",
             f"- Worktree: {state.get('worktree_path', '')}",
@@ -1473,6 +1626,7 @@ def cmd_feat_archive(args: argparse.Namespace) -> int:
     ensure_git_repo(root)
 
     state, tasks = load_feat(paths, args.feat)
+    workspace_mode = workspace_mode_of(state)
     current_status = str(state.get("status") or "")
     if current_status not in {"done", "blocked", "archived"}:
         eprint(
@@ -1488,7 +1642,7 @@ def cmd_feat_archive(args: argparse.Namespace) -> int:
 
     branch_exists = bool(branch) and git_local_branch_exists(root, branch)
     branch_merged = bool(branch_exists and git_branch_merged_into(root, branch, base_ref))
-    if current_status == "done" and not branch_merged:
+    if current_status == "done" and workspace_mode == "worktree" and not branch_merged:
         eprint(f"error: feat is done but branch is not merged into {base_ref}: {branch}")
         eprint(
             "hint: merge the feat branch into base (or mark the feat blocked) before archiving"
@@ -1562,12 +1716,16 @@ def cmd_feat_archive(args: argparse.Namespace) -> int:
     state["status"] = "archived"
     state["archived_at"] = state.get("archived_at") or utc_now()
     state["archived_cleanup"] = {
+        "workspace_mode": workspace_mode,
         "base_ref": base_ref,
         "branch_merged": branch_merged,
         "worktree_removed": worktree_removed,
         "worktree_pruned": worktree_pruned,
         "branch_deleted": branch_deleted,
-        "note": "worktree removed+pruned; branch deleted only when merged into base",
+        "note": (
+            "worktree mode removes/prunes worktree and deletes merged branch; "
+            "current_tree/proposal_only only archive feat metadata"
+        ),
     }
     state.setdefault("history", []).append(
         {"at": utc_now(), "action": "feat_archived", "detail": "moved + cleaned"}
@@ -1615,6 +1773,26 @@ def validate_feat(paths: HarnessPaths, root: Path, feat_id: str) -> list[str]:
     if state.get("feat_id") != feat_id:
         errors.append(f"{feat_id}: state feat_id mismatch")
 
+    workspace_mode = str(state.get("workspace_mode") or "").strip()
+    if workspace_mode not in WORKSPACE_MODES:
+        errors.append(f"{feat_id}: invalid workspace_mode: {workspace_mode or '<missing>'}")
+    else:
+        branch = str(state.get("branch") or "").strip()
+        wt_name = str(state.get("worktree_name") or "").strip()
+        wt_path = str(state.get("worktree_path") or "").strip()
+        if workspace_mode == "worktree":
+            if not branch:
+                errors.append(f"{feat_id}: worktree mode requires branch")
+            if not wt_name:
+                errors.append(f"{feat_id}: worktree mode requires worktree_name")
+            if not wt_path:
+                errors.append(f"{feat_id}: worktree mode requires worktree_path")
+        else:
+            if branch:
+                errors.append(f"{feat_id}: {workspace_mode} mode must not track dedicated branch")
+            if wt_name or wt_path:
+                errors.append(f"{feat_id}: {workspace_mode} mode must not track worktree fields")
+
     counters = state.get("counters", {})
     for key in ("gate_fail_streak", "no_progress_rounds", "round_count"):
         try:
@@ -1651,6 +1829,8 @@ def validate_feat(paths: HarnessPaths, root: Path, feat_id: str) -> list[str]:
     cur = state.get("current_task_id")
     if cur is not None and cur not in in_progress:
         errors.append(f"{feat_id}: current_task_id does not match in_progress task")
+    if workspace_mode == "proposal_only" and in_progress:
+        errors.append(f"{feat_id}: proposal_only feat must not have in_progress tasks")
 
     # Validate tracked commit messages for tasks that have commit hash.
     for task in task_items:
@@ -2148,6 +2328,7 @@ def cmd_replan_feats(args: argparse.Namespace) -> int:
                 "feat_id": feat_id,
                 "title": str(states[feat_id].get("title") or ""),
                 "status": status,
+                "workspace_mode": str(states[feat_id].get("workspace_mode") or ""),
                 "depends_on": sorted(deps_by_feat.get(feat_id, set())),
                 "dependents": sorted(dependents_by_feat.get(feat_id, [])),
                 "layer": layer_by_feat.get(feat_id),
@@ -2265,6 +2446,7 @@ def query_list(paths: HarnessPaths) -> list[dict[str, Any]]:
                 "feat_id": feat_id,
                 "title": state.get("title", ""),
                 "status": state.get("status", ""),
+                "workspace_mode": state.get("workspace_mode", ""),
                 "branch": state.get("branch", ""),
                 "worktree": state.get("worktree_path", ""),
                 "updated_at": state.get("updated_at", ""),
@@ -2301,7 +2483,12 @@ def query_filter(
         if task_status and int(item.get("task_stats", {}).get(task_status, 0)) == 0:
             continue
         if needle:
-            hay = f"{item.get('feat_id','')} {item.get('title','')} {item.get('branch','')}".lower()
+            hay = (
+                f"{item.get('feat_id','')} "
+                f"{item.get('title','')} "
+                f"{item.get('branch','')} "
+                f"{item.get('workspace_mode','')}"
+            ).lower()
             if needle not in hay:
                 continue
         out.append(item)
@@ -2367,7 +2554,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-strict", dest="strict", action="store_false")
     sp.set_defaults(strict=True, func=cmd_apply)
 
-    sp = sub.add_parser("create-feat", help="create feat + worktree")
+    sp = sub.add_parser("create-feat", help="create feat with explicit workspace mode")
     add_common(sp)
     sp.add_argument("--manifest", default=None)
     sp.add_argument("--strict", dest="strict", action="store_true")
@@ -2375,7 +2562,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--title", required=True)
     sp.add_argument("--slug", default="")
     sp.add_argument("--goal", required=True)
+    sp.add_argument("--workspace-mode", choices=sorted(WORKSPACE_MODES), default=None)
+    sp.add_argument("--branch-prefix", default=None)
     sp.set_defaults(strict=True, func=cmd_feat_new)
+
+    sp = sub.add_parser("assign-feat-workspace", help="assign current_tree/worktree to an existing feat")
+    add_common(sp)
+    sp.add_argument("--feat", required=True)
+    sp.add_argument("--workspace-mode", choices=["current_tree", "worktree"], required=True)
+    sp.add_argument("--branch-prefix", default=None)
+    sp.set_defaults(func=cmd_assign_feat_workspace)
 
     sp = sub.add_parser("show-feat-status", help="show feat status")
     add_common(sp)
