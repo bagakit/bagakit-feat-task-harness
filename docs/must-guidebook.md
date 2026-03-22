@@ -27,6 +27,9 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
 
 3) Current changes or proposals
 - Link to active proposals or change logs.
+- Lifecycle / spec-coding research: `docs/notes-spec-coding-lifecycle-research-2026-03.md`
+- Research source bundle and attachment index: `docs/notes-spec-coding-reference-bundle-2026-03.md`
+- Downloaded attachment bundle: `docs/artifacts/spec-coding-research-2026-03/`
 
 4) Build/run entrypoints
 - Link to the primary entrypoints and scripts.

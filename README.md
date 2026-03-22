@@ -5,7 +5,7 @@ A Bagakit skill for multi-session feat/task orchestration with:
 - explicit feat workspace modes (`worktree`, `current_tree`, `proposal_only`)
 - JSON SSOT state machine
 - task-level structured commit protocol
-- physical archive (`feats-archived/`) on feat close
+- physical archive (`feats-archived/`) and discard (`feats-discarded/`) on feat close
 - optional OpenSpec import/export helpers
 - optional living-doc memory sync
 
@@ -52,6 +52,7 @@ Runtime policy file:
 - required: `.bagakit/ft-harness/runtime-policy.json`
 - `git.branch_prefix` controls worktree-mode branch names
 - `workspace.default_mode` controls default feat workspace mode
+- `lifecycle.*_stale_days` controls doctor warnings for stale or unclosed feats
 
 Version policy:
 - no backward compatibility shims for old runtime schema/files
@@ -77,7 +78,8 @@ DAG files:
 ## Core loop
 
 ```bash
-# Create feat in explicit workspace mode
+# Create feat (default is proposal_only)
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "Add feature" --slug "add-feature" --goal "Deliver X"
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "Add feature" --slug "add-feature" --goal "Deliver X" --workspace-mode worktree
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "Dirty tree follow-up" --slug "dirty-tree-follow-up" --goal "Continue current branch work" --workspace-mode current_tree
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" create-feat --root . --title "Plan only" --slug "plan-only" --goal "Register proposal first" --workspace-mode proposal_only
@@ -91,12 +93,14 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" run-task-gate --root .
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" prepare-task-commit --root . --feat <feat-id> --task T-001 --summary "Implement T-001"
 # run git commit with generated message
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" finish-task --root . --feat <feat-id> --task T-001 --result done
+# if the feat becomes done, the command prints the next close step
 ```
 
-## Archive feat (finalize)
+## Close feat
 
 ```bash
 bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" archive-feat --root . --feat <feat-id>
+bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" discard-feat --root . --feat <feat-id> --reason stale
 ```
 
 `archive-feat` performs final-state archive actions:
@@ -105,10 +109,18 @@ bash "$BAGAKIT_FT_SKILL_DIR/scripts/feat-task-harness.sh" archive-feat --root . 
 - remove feat worktree directory + `git worktree prune` (`worktree` mode only)
 - delete feat branch when merged into base branch (`worktree` mode only)
 
+`discard-feat` performs final-state discard actions:
+- set status to `discarded`
+- move `.bagakit/ft-harness/feats/<feat-id>` -> `.bagakit/ft-harness/feats-discarded/<feat-id>`
+- export unstaged patch, staged patch, untracked archive, and branch diff artifacts when available (`worktree` mode only)
+- remove feat worktree directory + `git worktree prune` (`worktree` mode only)
+- delete feat branch even when unmerged after artifact export (`worktree` mode only)
+
 Guardrails:
 - if feat status is `done` in `worktree` mode, the feat branch must already be merged into base branch
 - worktree must be clean (no uncommitted changes, `worktree` mode only)
 - archive fails if stale worktree registration still exists after cleanup (`worktree` mode only)
+- doctor warns when a feat stays `proposal`, `ready`, `in_progress`, `blocked`, or `done` beyond lifecycle thresholds
 
 ## Validate / diagnose / query
 

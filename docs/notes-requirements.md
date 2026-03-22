@@ -37,6 +37,7 @@ sop:
 - Runtime policy must define the final-version workspace contract:
   - `git.branch_prefix` for dedicated feat branches
   - `workspace.default_mode` in `worktree|current_tree|proposal_only`
+  - `lifecycle.*_stale_days` and `lifecycle.done_close_due_days` for doctor warnings
 
 ## Workspace Contract
 
@@ -44,6 +45,16 @@ sop:
 - `worktree` mode owns a dedicated branch + `.worktrees/` entry.
 - `current_tree` mode runs in the repository root and must not track dedicated worktree fields.
 - `proposal_only` is planning-only and must be assigned before `start-task`.
+- Default workspace mode should remain lightweight (`proposal_only`) so speculative feats do not allocate worktrees by default.
+- `doctor` must warn on stale `proposal`, `ready`, `in_progress`, `blocked`, and unclosed `done` feats via lifecycle thresholds.
+
+## Close Contract
+
+- Feats may close as `archived` or `discarded`.
+- `archived` means the feat was intentionally retained as a completed/closed result.
+- `discarded` means the feat is closed but preserved as a reference because it became stale, invalid, or superseded.
+- `done` is not a final close outcome; doctor should warn if a feat stays `done` without being archived or discarded.
+- `discard-feat` on a dirty worktree must preserve unstaged diff, staged diff, and untracked files before forcing worktree removal.
 
 ## Feat DAG Snapshot Contract
 

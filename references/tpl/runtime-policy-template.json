@@ -5,13 +5,20 @@
     "branch_prefix": "feat/"
   },
   "workspace": {
-    "default_mode": "worktree"
+    "default_mode": "proposal_only"
   },
   "stop_thresholds": {
     "gate_fail_streak": 3,
     "no_progress_rounds": 2,
     "max_round_count": 8,
     "max_session_minutes": 90
+  },
+  "lifecycle": {
+    "proposal_stale_days": 7,
+    "ready_stale_days": 5,
+    "in_progress_stale_days": 3,
+    "blocked_stale_days": 10,
+    "done_close_due_days": 3
   },
   "gate": {
     "project_type": "auto",

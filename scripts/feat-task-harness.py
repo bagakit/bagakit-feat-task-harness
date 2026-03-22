@@ -12,6 +12,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -21,10 +22,11 @@ from typing import Any, Iterable
 
 FEAT_ID_RE = re.compile(r"^f-\d{8}-[a-z0-9][a-z0-9-]*$")
 TASK_ID_RE = re.compile(r"^T-\d{3}$")
-FEAT_STATUS = {"proposal", "ready", "in_progress", "blocked", "done", "archived"}
+FEAT_STATUS = {"proposal", "ready", "in_progress", "blocked", "done", "archived", "discarded"}
 TASK_STATUS = {"todo", "in_progress", "done", "blocked"}
 GATE_STATUS = {"pass", "fail"}
 WORKSPACE_MODES = {"worktree", "current_tree", "proposal_only"}
+CLOSED_FEAT_STATUS = {"archived", "discarded"}
 UNRESOLVED_ENV_RE = re.compile(r"\$\{?[A-Za-z_][A-Za-z0-9_]*")
 REFERENCE_SKILLS_ENV = "BAGAKIT_REFERENCE_SKILLS_HOME"
 RUNTIME_POLICY_FILENAME = "runtime-policy.json"
@@ -127,6 +129,56 @@ def current_branch(root: Path) -> str:
     return "" if branch == "HEAD" else branch
 
 
+def path_from_porcelain_line(line: str) -> str:
+    raw = line[3:] if len(line) > 3 else line
+    if " -> " in raw:
+        raw = raw.split(" -> ", 1)[1]
+    return raw.strip().strip('"')
+
+
+def is_harness_generated_gitignore(root: Path, rel_path: str) -> bool:
+    if rel_path != ".gitignore":
+        return False
+    target = root / rel_path
+    if not target.exists():
+        return False
+    lines = [line.strip() for line in target.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return lines == [".worktrees"]
+
+
+def non_harness_git_status_lines(root: Path) -> list[str]:
+    cp = run_cmd(["git", "-C", str(root), "status", "--porcelain"])
+    if cp.returncode != 0:
+        raise SystemExit(cp.stderr.strip() or cp.stdout.strip() or "git status failed")
+
+    ignored_prefixes = (".bagakit/", ".worktrees/")
+    out: list[str] = []
+    for raw in cp.stdout.splitlines():
+        line = raw.rstrip()
+        if not line:
+            continue
+        path = path_from_porcelain_line(line)
+        if path.startswith(ignored_prefixes):
+            continue
+        if is_harness_generated_gitignore(root, path):
+            continue
+        out.append(line)
+    return out
+
+
+def recommend_workspace_mode(root: Path) -> tuple[str, str]:
+    changes = non_harness_git_status_lines(root)
+    if changes:
+        return (
+            "worktree",
+            "repository has non-harness changes; isolated worktree is safer",
+        )
+    return (
+        "current_tree",
+        "repository is clean aside from harness metadata; current_tree is lighter than a dedicated worktree",
+    )
+
+
 def slugify(value: str) -> str:
     value = value.strip().lower()
     value = re.sub(r"[^a-z0-9]+", "-", value)
@@ -151,6 +203,10 @@ class HarnessPaths:
     @property
     def feats_archived_dir(self) -> Path:
         return self.harness_dir / "feats-archived"
+
+    @property
+    def feats_discarded_dir(self) -> Path:
+        return self.harness_dir / "feats-discarded"
 
     @property
     def index_dir(self) -> Path:
@@ -189,7 +245,12 @@ class HarnessPaths:
         return self.artifacts_dir / "ref-read-report.md"
 
     def feat_dir(self, feat_id: str, *, status: str | None = None) -> Path:
-        base = self.feats_archived_dir if status == "archived" else self.feats_dir
+        if status == "archived":
+            base = self.feats_archived_dir
+        elif status == "discarded":
+            base = self.feats_discarded_dir
+        else:
+            base = self.feats_dir
         return base / feat_id
 
     def feat_state(self, feat_id: str, *, status: str | None = None) -> Path:
@@ -252,7 +313,7 @@ def ensure_runtime_policy(paths: HarnessPaths, skill_dir: Path) -> Path:
 
 def resolve_workspace_mode(policy: dict[str, Any], requested: str | None) -> str:
     workspace_cfg = policy.get("workspace", {}) if isinstance(policy, dict) else {}
-    raw = str(requested or workspace_cfg.get("default_mode", "worktree")).strip().lower()
+    raw = str(requested or workspace_cfg.get("default_mode", "proposal_only")).strip().lower()
     if raw not in WORKSPACE_MODES:
         raise SystemExit(
             "error: invalid workspace mode: "
@@ -781,6 +842,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
     paths.harness_dir.mkdir(parents=True, exist_ok=True)
     paths.feats_dir.mkdir(parents=True, exist_ok=True)
     paths.feats_archived_dir.mkdir(parents=True, exist_ok=True)
+    paths.feats_discarded_dir.mkdir(parents=True, exist_ok=True)
     paths.index_dir.mkdir(parents=True, exist_ok=True)
     paths.dag_archive_dir.mkdir(parents=True, exist_ok=True)
     paths.artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -816,6 +878,7 @@ def unique_feat_id(paths: HarnessPaths, slug: str) -> str:
             feat_id in existing_ids
             or paths.feat_dir(feat_id).exists()
             or paths.feat_dir(feat_id, status="archived").exists()
+            or paths.feat_dir(feat_id, status="discarded").exists()
         )
 
     base = f"f-{utc_day()}-{slug}"
@@ -974,8 +1037,8 @@ def cmd_assign_feat_workspace(args: argparse.Namespace) -> int:
     ensure_git_repo(root)
 
     state, tasks = load_feat(paths, args.feat)
-    if str(state.get("status") or "") == "archived":
-        eprint(f"error: cannot assign workspace for archived feat: {args.feat}")
+    if str(state.get("status") or "") in CLOSED_FEAT_STATUS:
+        eprint(f"error: cannot assign workspace for closed feat: {args.feat}")
         return 1
 
     current_mode = workspace_mode_of(state)
@@ -1090,13 +1153,27 @@ def cmd_task_start(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     paths = HarnessPaths(root)
     ensure_harness_exists(paths)
+    ensure_git_repo(root)
     state, tasks = load_feat(paths, args.feat)
     workspace_mode = workspace_mode_of(state)
     if workspace_mode == "proposal_only":
+        recommended_mode, reason = recommend_workspace_mode(root)
+        next_cmd = (
+            "feat-task-harness.sh assign-feat-workspace "
+            f"--root {shlex.quote(str(root))} --feat {args.feat} --workspace-mode {recommended_mode}"
+        )
+        alternative = (
+            "feat-task-harness.sh assign-feat-workspace "
+            f"--root {shlex.quote(str(root))} --feat {args.feat} "
+            f"--workspace-mode {'worktree' if recommended_mode == 'current_tree' else 'current_tree'}"
+        )
         eprint(
             f"error: feat {args.feat} is proposal_only; "
             "assign a workspace first with feat-task-harness.sh assign-feat-workspace"
         )
+        print(f"recommendation: {recommended_mode} ({reason})")
+        print(f"next: {next_cmd}")
+        print(f"alternative: {alternative}")
         return 1
 
     task_id = args.task
@@ -1526,6 +1603,29 @@ def cmd_task_finish(args: argparse.Namespace) -> int:
     save_feat(paths, args.feat, state, tasks)
     print(f"ok: task finished {args.feat}/{args.task} => {result}")
     print(f"feat_status: {state['status']}")
+    if state["status"] == "done":
+        root_q = shlex.quote(str(root))
+        archive_cmd = f"feat-task-harness.sh archive-feat --root {root_q} --feat {args.feat}"
+        discard_cmd = (
+            "feat-task-harness.sh discard-feat "
+            f"--root {root_q} --feat {args.feat} --reason superseded"
+        )
+        if workspace_mode_of(state) == "worktree":
+            branch = str(state.get("branch") or "")
+            base_ref = str(state.get("base_ref") or pick_base_branch(root))
+            branch_merged = bool(branch and git_local_branch_exists(root, branch) and git_branch_merged_into(root, branch, base_ref))
+            if branch and not branch_merged:
+                print(
+                    "next: git -C "
+                    f"{root_q} checkout {shlex.quote(base_ref)} "
+                    f"&& git -C {root_q} merge --no-ff {shlex.quote(branch)}"
+                )
+                print(f"after_merge: {archive_cmd}")
+            else:
+                print(f"next: {archive_cmd}")
+        else:
+            print(f"next: {archive_cmd}")
+        print(f"alternative: {discard_cmd}")
     return 0
 
 
@@ -1537,7 +1637,13 @@ def render_summary(state: dict[str, Any], tasks: dict[str, Any]) -> str:
     done = count_tasks(tasks, "done")
     blocked = count_tasks(tasks, "blocked")
     counters = state.get("counters", {})
-    cleanup = state.get("archived_cleanup", {}) if isinstance(state.get("archived_cleanup"), dict) else {}
+    cleanup = {}
+    for key in ("archived_cleanup", "discarded_cleanup"):
+        val = state.get(key)
+        if isinstance(val, dict):
+            cleanup = val
+            break
+    closed_at = state.get("archived_at") or state.get("discarded_at") or utc_now()
 
     return "\n".join(
         [
@@ -1551,13 +1657,19 @@ def render_summary(state: dict[str, Any], tasks: dict[str, Any]) -> str:
             f"- Base Ref: {state.get('base_ref', '')}",
             f"- Branch: {state.get('branch', '')}",
             f"- Worktree: {state.get('worktree_path', '')}",
-            f"- Archived At (UTC): {state.get('archived_at', '') or utc_now()}",
+            f"- Closed At (UTC): {closed_at}",
+            f"- Discard Reason: {state.get('discard_reason') or ''}",
+            f"- Replacement Feat: {state.get('replacement_feat_id') or ''}",
             "",
-            "## Archive Cleanup",
+            "## Closure Cleanup",
             f"- Branch Merged: {cleanup.get('branch_merged', '')}",
             f"- Worktree Removed: {cleanup.get('worktree_removed', '')}",
             f"- Worktree Pruned: {cleanup.get('worktree_pruned', '')}",
             f"- Branch Deleted: {cleanup.get('branch_deleted', '')}",
+            f"- Worktree Patch: {cleanup.get('worktree_patch', '')}",
+            f"- Worktree Staged Patch: {cleanup.get('worktree_staged_patch', '')}",
+            f"- Branch Patch: {cleanup.get('branch_patch', '')}",
+            f"- Untracked Archive: {cleanup.get('untracked_archive', '')}",
             f"- Cleanup Note: {cleanup.get('note', '')}",
             "",
             "## Task Stats",
@@ -1616,6 +1728,60 @@ def git_worktree_paths(root: Path) -> set[Path]:
             continue
         out.add(Path(path).resolve())
     return out
+
+
+def export_discard_artifacts(
+    root: Path,
+    feat_dir: Path,
+    *,
+    base_ref: str,
+    branch: str,
+    wt_abs: Path | None,
+) -> dict[str, str]:
+    cleanup: dict[str, str] = {}
+    artifacts_dir = feat_dir / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    if wt_abs is not None and wt_abs.exists():
+        cp = run_cmd(["git", "-C", str(wt_abs), "diff", "--binary"])
+        if cp.returncode != 0:
+            raise SystemExit(cp.stderr.strip() or cp.stdout.strip() or "git diff failed in worktree")
+        if cp.stdout.strip():
+            patch_file = artifacts_dir / "discard-worktree.patch"
+            write_text(patch_file, cp.stdout)
+            cleanup["worktree_patch"] = patch_file.name
+
+        cp = run_cmd(["git", "-C", str(wt_abs), "diff", "--cached", "--binary"])
+        if cp.returncode != 0:
+            raise SystemExit(cp.stderr.strip() or cp.stdout.strip() or "git diff --cached failed in worktree")
+        if cp.stdout.strip():
+            patch_file = artifacts_dir / "discard-worktree-staged.patch"
+            write_text(patch_file, cp.stdout)
+            cleanup["worktree_staged_patch"] = patch_file.name
+
+        cp = run_cmd(["git", "-C", str(wt_abs), "ls-files", "--others", "--exclude-standard", "-z"])
+        if cp.returncode != 0:
+            raise SystemExit(cp.stderr.strip() or cp.stdout.strip() or "git ls-files failed in worktree")
+        untracked = [item for item in cp.stdout.split("\0") if item]
+        if untracked:
+            archive_file = artifacts_dir / "discard-untracked.tar.gz"
+            with tarfile.open(archive_file, "w:gz") as tf:
+                for rel in untracked:
+                    target = wt_abs / rel
+                    if target.exists():
+                        tf.add(target, arcname=rel, recursive=True)
+            cleanup["untracked_archive"] = archive_file.name
+
+    if branch and git_local_branch_exists(root, branch):
+        cp = run_cmd(["git", "-C", str(root), "diff", "--binary", f"{base_ref}...{branch}"])
+        if cp.returncode != 0:
+            raise SystemExit(cp.stderr.strip() or cp.stdout.strip() or "git branch diff failed")
+        if cp.stdout.strip():
+            patch_file = artifacts_dir / "discard-branch.patch"
+            write_text(patch_file, cp.stdout)
+            cleanup["branch_patch"] = patch_file.name
+
+    return cleanup
 
 
 def cmd_feat_archive(args: argparse.Namespace) -> int:
@@ -1756,6 +1922,156 @@ def cmd_feat_archive(args: argparse.Namespace) -> int:
 
     save_feat(paths, args.feat, state, tasks)
     print(f"ok: feat archived {args.feat}")
+    return 0
+
+
+def cmd_feat_discard(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    paths = HarnessPaths(root)
+    ensure_harness_exists(paths)
+    ensure_git_repo(root)
+
+    state, tasks = load_feat(paths, args.feat)
+    current_status = str(state.get("status") or "")
+    if current_status == "discarded":
+        print(f"ok: feat already discarded {args.feat}")
+        return 0
+    if current_status == "archived":
+        eprint(f"error: archived feat cannot be discarded: {args.feat}")
+        return 1
+    if current_status not in {"proposal", "ready", "in_progress", "blocked", "done"}:
+        eprint(f"error: feat cannot be discarded from status={current_status}")
+        return 1
+    if current_status == "in_progress" and not args.force:
+        eprint("error: in_progress feat requires --force before discard")
+        return 1
+
+    replacement = str(args.replacement or "").strip()
+    if replacement:
+        if replacement == args.feat:
+            eprint("error: replacement feat must differ from discarded feat")
+            return 1
+        if get_feat_index_entry(load_index(paths), replacement) is None:
+            eprint(f"error: replacement feat not indexed: {replacement}")
+            return 1
+
+    ts = utc_now()
+    if current_status == "in_progress":
+        for task in tasks.get("tasks", []):
+            if task.get("status") == "in_progress":
+                task["status"] = "blocked"
+                task["finished_at"] = task.get("finished_at") or ts
+                task["updated_at"] = ts
+                task.setdefault("notes", []).append("force-discarded before task completion")
+        state["current_task_id"] = None
+
+    workspace_mode = workspace_mode_of(state)
+    branch = str(state.get("branch") or "")
+    base_ref = str(state.get("base_ref") or pick_base_branch(root))
+    worktree_path = str(state.get("worktree_path") or "")
+    wt_abs = resolve_worktree_abs(root, worktree_path) if worktree_path else None
+    feat_dir = paths.feat_dir(args.feat, status=current_status)
+
+    cleanup = export_discard_artifacts(root, feat_dir, base_ref=base_ref, branch=branch, wt_abs=wt_abs)
+
+    worktree_removed = False
+    worktree_pruned = False
+    if wt_abs is not None and wt_abs.exists():
+        cp = run_cmd(["git", "-C", str(root), "worktree", "remove", "--force", str(wt_abs)])
+        if cp.returncode != 0:
+            eprint(cp.stderr.strip() or cp.stdout.strip() or "git worktree remove failed")
+            return 1
+        worktree_removed = True
+        print(f"ok: worktree removed {wt_abs}")
+        cp = run_cmd(["git", "-C", str(root), "worktree", "prune"])
+        if cp.returncode != 0:
+            eprint(cp.stderr.strip() or cp.stdout.strip() or "git worktree prune failed")
+            return 1
+        worktree_pruned = True
+
+    if wt_abs is not None and wt_abs in git_worktree_paths(root):
+        eprint(f"error: worktree entry still registered after discard cleanup: {wt_abs}")
+        return 1
+
+    branch_deleted = False
+    branch_merged = bool(branch and git_local_branch_exists(root, branch) and git_branch_merged_into(root, branch, base_ref))
+    if branch and git_local_branch_exists(root, branch):
+        cp = run_cmd(["git", "-C", str(root), "branch", "-D", branch])
+        if cp.returncode != 0:
+            eprint(cp.stderr.strip() or cp.stdout.strip() or "git branch delete failed")
+            return 1
+        branch_deleted = True
+        print(f"ok: branch deleted {branch}")
+
+    state["closed_from_status"] = current_status
+    state["status"] = "discarded"
+    state["discard_reason"] = args.reason
+    state["replacement_feat_id"] = replacement or None
+    state["discarded_at"] = state.get("discarded_at") or ts
+    state.setdefault("history", []).append(
+        {
+            "at": ts,
+            "action": "feat_discarded",
+            "detail": f"reason={args.reason}; replacement={replacement or 'none'}",
+        }
+    )
+
+    src_dir = paths.feat_dir(args.feat, status=current_status)
+    dst_dir = paths.feat_dir(args.feat, status="discarded")
+    if not src_dir.exists():
+        eprint(f"error: missing feat directory: {src_dir}")
+        return 1
+    if dst_dir.exists():
+        eprint(f"error: discarded feat directory already exists: {dst_dir}")
+        return 1
+    dst_dir.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        src_dir.rename(dst_dir)
+    except OSError:
+        shutil.move(str(src_dir), str(dst_dir))
+    print(f"ok: feat dir moved {src_dir} -> {dst_dir}")
+
+    discarded_artifacts_dir = dst_dir / "artifacts"
+    state["discarded_cleanup"] = {
+        "workspace_mode": workspace_mode,
+        "base_ref": base_ref,
+        "branch_merged": branch_merged,
+        "worktree_removed": worktree_removed,
+        "worktree_pruned": worktree_pruned,
+        "branch_deleted": branch_deleted,
+        "worktree_patch": (
+            str((discarded_artifacts_dir / cleanup["worktree_patch"]).relative_to(root))
+            if cleanup.get("worktree_patch")
+            else ""
+        ),
+        "worktree_staged_patch": (
+            str((discarded_artifacts_dir / cleanup["worktree_staged_patch"]).relative_to(root))
+            if cleanup.get("worktree_staged_patch")
+            else ""
+        ),
+        "branch_patch": (
+            str((discarded_artifacts_dir / cleanup["branch_patch"]).relative_to(root))
+            if cleanup.get("branch_patch")
+            else ""
+        ),
+        "untracked_archive": (
+            str((discarded_artifacts_dir / cleanup["untracked_archive"]).relative_to(root))
+            if cleanup.get("untracked_archive")
+            else ""
+        ),
+        "note": (
+            "discard closes stale/superseded work while preserving feat artifacts; "
+            "worktree mode force-removes worktree and deletes branch after exporting patches when available"
+        ),
+    }
+
+    summary = render_summary(state, tasks)
+    summary_file = paths.feat_summary(args.feat, status="discarded")
+    write_text(summary_file, summary)
+    print(f"write: {summary_file}")
+
+    save_feat(paths, args.feat, state, tasks)
+    print(f"ok: feat discarded {args.feat}")
     return 0
 
 
@@ -1900,11 +2216,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
     for feat_id, status in feat_status_by_id.items():
         active_dir = paths.feat_dir(feat_id)
         archived_dir = paths.feat_dir(feat_id, status="archived")
-        if status == "archived":
+        discarded_dir = paths.feat_dir(feat_id, status="discarded")
+        if status in CLOSED_FEAT_STATUS:
             if active_dir.exists():
-                errors.append(f"{feat_id}: archived feat dir must not exist in feats/: {active_dir}")
-            if not archived_dir.exists():
-                errors.append(f"{feat_id}: archived feat dir missing: {archived_dir}")
+                errors.append(f"{feat_id}: closed feat dir must not exist in feats/: {active_dir}")
+            closed_dir = archived_dir if status == "archived" else discarded_dir
+            if not closed_dir.exists():
+                errors.append(f"{feat_id}: {status} feat dir missing: {closed_dir}")
             try:
                 state, _ = load_feat(paths, feat_id)
             except SystemExit as exc:
@@ -1915,7 +2233,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 wt_abs = resolve_worktree_abs(root, wt_raw)
                 if wt_abs in registered_worktrees:
                     errors.append(
-                        f"{feat_id}: archived feat still has registered git worktree entry: {wt_abs}"
+                        f"{feat_id}: closed feat still has registered git worktree entry: {wt_abs}"
                     )
         else:
             if not active_dir.exists():
@@ -1923,6 +2241,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
             if archived_dir.exists():
                 errors.append(
                     f"{feat_id}: non-archived feat dir must not exist in feats-archived/: {archived_dir}"
+                )
+            if discarded_dir.exists():
+                errors.append(
+                    f"{feat_id}: non-discarded feat dir must not exist in feats-discarded/: {discarded_dir}"
                 )
 
     # Detect feat directories missing from index (active + archived).
@@ -1934,6 +2256,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
         for child in sorted(paths.feats_archived_dir.iterdir()):
             if child.is_dir() and child.name not in feats:
                 errors.append(f"archived feat directory not indexed: {child.name}")
+    if paths.feats_discarded_dir.exists():
+        for child in sorted(paths.feats_discarded_dir.iterdir()):
+            if child.is_dir() and child.name not in feats:
+                errors.append(f"discarded feat directory not indexed: {child.name}")
 
     if paths.dag_file.exists():
         try:
@@ -1990,6 +2316,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     gate_fail_limit = int(thresholds.get("gate_fail_streak", 3))
     no_progress_limit = int(thresholds.get("no_progress_rounds", 2))
     max_round = int(thresholds.get("max_round_count", 8))
+    lifecycle_cfg = config.get("lifecycle", {}) if isinstance(config, dict) else {}
+    done_close_due_days = int(lifecycle_cfg.get("done_close_due_days", 3))
+    proposal_stale_days = int(lifecycle_cfg.get("proposal_stale_days", 7))
+    ready_stale_days = int(lifecycle_cfg.get("ready_stale_days", 5))
+    in_progress_stale_days = int(lifecycle_cfg.get("in_progress_stale_days", 3))
+    blocked_stale_days = int(lifecycle_cfg.get("blocked_stale_days", 10))
 
     index_data = load_index(paths)
     warnings: list[str] = []
@@ -2001,6 +2333,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         fail_streak = int(counters.get("gate_fail_streak", 0))
         no_progress = int(counters.get("no_progress_rounds", 0))
         rounds = int(counters.get("round_count", 0))
+        created_at = str(state.get("created_at") or "")
+        updated_at = str(state.get("updated_at") or created_at)
+        status = str(state.get("status") or "")
 
         if fail_streak >= gate_fail_limit:
             warnings.append(
@@ -2015,13 +2350,38 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 f"{feat_id}: round_count={rounds} reached threshold {max_round}"
             )
 
-        if state.get("status") == "in_progress" and count_tasks(tasks, "in_progress") == 0:
+        if status == "in_progress" and count_tasks(tasks, "in_progress") == 0:
             warnings.append(f"{feat_id}: feat status in_progress but no task in_progress")
 
-        if state.get("status") == "archived":
-            summary_file = paths.feat_summary(feat_id, status="archived")
+        if status in CLOSED_FEAT_STATUS:
+            summary_file = paths.feat_summary(feat_id, status=status)
             if not summary_file.exists():
-                warnings.append(f"{feat_id}: archived feat missing summary.md")
+                warnings.append(f"{feat_id}: {status} feat missing summary.md")
+            continue
+
+        age_basis = updated_at or created_at
+        try:
+            age_days = int((datetime.now(timezone.utc) - datetime.fromisoformat(age_basis.replace("Z", "+00:00"))).total_seconds() // 86400)
+        except Exception:  # noqa: BLE001
+            age_days = -1
+
+        if status == "done" and age_days >= done_close_due_days >= 0:
+            warnings.append(
+                f"{feat_id}: status done for {age_days} day(s); close with archive-feat or discard-feat"
+            )
+        if status == "proposal" and age_days >= proposal_stale_days >= 0:
+            warnings.append(f"{feat_id}: proposal stale for {age_days} day(s); consider discard or activation")
+        if status == "ready" and age_days >= ready_stale_days >= 0:
+            warnings.append(f"{feat_id}: ready stale for {age_days} day(s); consider start-task or discard")
+        if status == "in_progress" and age_days >= in_progress_stale_days >= 0:
+            warnings.append(
+                f"{feat_id}: in_progress for {age_days} day(s); investigate current task or discard/supersede the feat"
+            )
+        if status == "blocked" and age_days >= blocked_stale_days >= 0:
+            warnings.append(f"{feat_id}: blocked for {age_days} day(s); consider discard or superseding plan")
+        if str(state.get("workspace_mode") or "") == "worktree" and int(counters.get("round_count", 0)) == 0:
+            if age_days >= ready_stale_days >= 0:
+                warnings.append(f"{feat_id}: worktree assigned but no task rounds recorded for {age_days} day(s)")
 
     print("== doctor report ==")
     if warnings:
@@ -2033,7 +2393,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print("\nrecommended next steps:")
     print("1) Address threshold warnings before starting next task.")
     print("2) Run feat-task-harness.sh run-task-gate before every task commit.")
-    print("3) Promote living-doc inbox items after feat archive when applicable.")
+    print("3) Close stale feats explicitly with archive-feat or discard-feat.")
     return 0
 
 
@@ -2067,7 +2427,7 @@ def parse_dependency_spec(raw: str) -> tuple[str, list[str]]:
 
 
 def feat_is_completed(status: str) -> bool:
-    return status in {"done", "archived"}
+    return status in CLOSED_FEAT_STATUS
 
 
 def build_layered_dag(
@@ -2150,7 +2510,7 @@ def load_non_archived_feats(paths: HarnessPaths) -> tuple[dict[str, dict[str, An
         if not feat_id:
             continue
         status = str(item.get("status") or "")
-        if status == "archived":
+        if status in CLOSED_FEAT_STATUS:
             continue
         state, tasks = load_feat(paths, feat_id)
         states[feat_id] = state
@@ -2276,6 +2636,9 @@ def cmd_replan_feats(args: argparse.Namespace) -> int:
             if dep_status == "archived":
                 notes.append(f"{feat_id} depends on archived feat {dep}; treated as already satisfied")
                 continue
+            if dep_status == "discarded":
+                eprint(f"error: {feat_id} depends on discarded feat {dep}; update dependencies before replanning")
+                return 1
             if dep not in states:
                 notes.append(f"{feat_id} dependency missing from active DAG set: {dep}")
                 continue
@@ -2612,6 +2975,14 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(sp)
     sp.add_argument("--feat", required=True)
     sp.set_defaults(func=cmd_feat_archive)
+
+    sp = sub.add_parser("discard-feat", help="discard feat and preserve reference artifacts")
+    add_common(sp)
+    sp.add_argument("--feat", required=True)
+    sp.add_argument("--reason", choices=["stale", "superseded", "cancelled", "invalid"], required=True)
+    sp.add_argument("--replacement", default="")
+    sp.add_argument("--force", action="store_true")
+    sp.set_defaults(func=cmd_feat_discard)
 
     sp = sub.add_parser("validate-harness", help="validate harness consistency")
     add_common(sp)

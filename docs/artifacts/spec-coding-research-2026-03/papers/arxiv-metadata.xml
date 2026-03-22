@@ -1,0 +1,293 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/uhozmgLOZJLyMyXr8rNPGWsE8N8</id>
+  <title>arXiv Query: search_query=&amp;id_list=2405.15793,2407.01489,2512.17540,2508.12358,2509.09917,2509.22908,2602.02361&amp;start=0&amp;max_results=10</title>
+  <updated>2026-03-21T18:01:28Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=&amp;start=0&amp;max_results=10&amp;id_list=2405.15793,2407.01489,2512.17540,2508.12358,2509.09917,2509.22908,2602.02361" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>10</opensearch:itemsPerPage>
+  <opensearch:totalResults>7</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2405.15793v3</id>
+    <title>SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering</title>
+    <updated>2024-11-11T20:01:15Z</updated>
+    <link href="https://arxiv.org/abs/2405.15793v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2405.15793v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Language model (LM) agents are increasingly being used to automate complicated tasks in digital environments. Just as humans benefit from powerful software applications, such as integrated development environments, for complex tasks like software engineering, we posit that LM agents represent a new category of end users with their own needs and abilities, and would benefit from specially-built interfaces to the software they use. We investigate how interface design affects the performance of language model agents. As a result of this exploration, we introduce SWE-agent: a system that facilitates LM agents to autonomously use computers to solve software engineering tasks. SWE-agent's custom agent-computer interface (ACI) significantly enhances an agent's ability to create and edit code files, navigate entire repositories, and execute tests and other programs. We evaluate SWE-agent on SWE-bench and HumanEvalFix, achieving state-of-the-art performance on both with a pass@1 rate of 12.5% and 87.7%, respectively, far exceeding the previous state-of-the-art achieved with non-interactive LMs. Finally, we provide insight on how the design of the ACI can impact agents' behavior and performance.</summary>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.HC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-05-06T17:41:33Z</published>
+    <arxiv:comment>Code, data, and demo available at https://swe-agent.com</arxiv:comment>
+    <arxiv:primary_category term="cs.SE"/>
+    <author>
+      <name>John Yang</name>
+    </author>
+    <author>
+      <name>Carlos E. Jimenez</name>
+    </author>
+    <author>
+      <name>Alexander Wettig</name>
+    </author>
+    <author>
+      <name>Kilian Lieret</name>
+    </author>
+    <author>
+      <name>Shunyu Yao</name>
+    </author>
+    <author>
+      <name>Karthik Narasimhan</name>
+    </author>
+    <author>
+      <name>Ofir Press</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2602.02361v1</id>
+    <title>SWE-Universe: Scale Real-World Verifiable Environments to Millions</title>
+    <updated>2026-02-02T17:20:30Z</updated>
+    <link href="https://arxiv.org/abs/2602.02361v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2602.02361v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We propose SWE-Universe, a scalable and efficient framework for automatically constructing real-world software engineering (SWE) verifiable environments from GitHub pull requests (PRs). To overcome the prevalent challenges of automatic building, such as low production yield, weak verifiers, and prohibitive cost, our framework utilizes a building agent powered by an efficient custom-trained model. This agent employs iterative self-verification and in-loop hacking detection to ensure the reliable generation of high-fidelity, verifiable tasks. Using this method, we scale the number of real-world multilingual SWE environments to a million scale (807,693). We demonstrate the profound value of our environments through large-scale agentic mid-training and reinforcement learning. Finally, we applied this technique to Qwen3-Max-Thinking and achieved a score of 75.3% on SWE-Bench Verified. Our work provides both a critical resource and a robust methodology to advance the next generation of coding agents.</summary>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-02-02T17:20:30Z</published>
+    <arxiv:comment>13 pages</arxiv:comment>
+    <arxiv:primary_category term="cs.SE"/>
+    <author>
+      <name>Mouxiang Chen</name>
+    </author>
+    <author>
+      <name>Lei Zhang</name>
+    </author>
+    <author>
+      <name>Yunlong Feng</name>
+    </author>
+    <author>
+      <name>Xuwu Wang</name>
+    </author>
+    <author>
+      <name>Wenting Zhao</name>
+    </author>
+    <author>
+      <name>Ruisheng Cao</name>
+    </author>
+    <author>
+      <name>Jiaxi Yang</name>
+    </author>
+    <author>
+      <name>Jiawei Chen</name>
+    </author>
+    <author>
+      <name>Mingze Li</name>
+    </author>
+    <author>
+      <name>Zeyao Ma</name>
+    </author>
+    <author>
+      <name>Hao Ge</name>
+    </author>
+    <author>
+      <name>Zongmeng Zhang</name>
+    </author>
+    <author>
+      <name>Zeyu Cui</name>
+    </author>
+    <author>
+      <name>Dayiheng Liu</name>
+    </author>
+    <author>
+      <name>Jingren Zhou</name>
+    </author>
+    <author>
+      <name>Jianling Sun</name>
+    </author>
+    <author>
+      <name>Junyang Lin</name>
+    </author>
+    <author>
+      <name>Binyuan Hui</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2407.01489v2</id>
+    <title>Agentless: Demystifying LLM-based Software Engineering Agents</title>
+    <updated>2024-10-29T17:29:27Z</updated>
+    <link href="https://arxiv.org/abs/2407.01489v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2407.01489v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Recent advancements in large language models (LLMs) have significantly advanced the automation of software development tasks, including code synthesis, program repair, and test generation. More recently, researchers and industry practitioners have developed various autonomous LLM agents to perform end-to-end software development tasks. These agents are equipped with the ability to use tools, run commands, observe feedback from the environment, and plan for future actions. However, the complexity of these agent-based approaches, together with the limited abilities of current LLMs, raises the following question: Do we really have to employ complex autonomous software agents? To attempt to answer this question, we build Agentless -- an agentless approach to automatically solve software development problems. Compared to the verbose and complex setup of agent-based approaches, Agentless employs a simplistic three-phase process of localization, repair, and patch validation, without letting the LLM decide future actions or operate with complex tools. Our results on the popular SWE-bench Lite benchmark show that surprisingly the simplistic Agentless is able to achieve both the highest performance (32.00%, 96 correct fixes) and low cost ($0.70) compared with all existing open-source software agents! Furthermore, we manually classified the problems in SWE-bench Lite and found problems with exact ground truth patch or insufficient/misleading issue descriptions. As such, we construct SWE-bench Lite-S by excluding such problematic issues to perform more rigorous evaluation and comparison. Our work highlights the current overlooked potential of a simple, interpretable technique in autonomous software development. We hope Agentless will help reset the baseline, starting point, and horizon for autonomous software agents, and inspire future work along this crucial direction.</summary>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-07-01T17:24:45Z</published>
+    <arxiv:primary_category term="cs.SE"/>
+    <author>
+      <name>Chunqiu Steven Xia</name>
+    </author>
+    <author>
+      <name>Yinlin Deng</name>
+    </author>
+    <author>
+      <name>Soren Dunn</name>
+    </author>
+    <author>
+      <name>Lingming Zhang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2509.09917v2</id>
+    <title>Enhancing LLM-based Specification Generation via Program Slicing and Logical Deletion</title>
+    <updated>2026-02-02T16:27:03Z</updated>
+    <link href="https://arxiv.org/abs/2509.09917v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2509.09917v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Traditional formal specification generation methods are typically tailored to specific specification types, and therefore suffer from limited generality. In recent years, large language model (LLM)-based specification generation approaches have emerged, offering a new direction for improving the universality of automated specification synthesis. However, when dealing with complex control flow, LLMs often struggle to precisely generate complete specifications that cover substructures. Moreover, the distinctive verification pipelines adopted by existing approaches may incorrectly discard logically correct specifications, while verification tools alone cannot reliably identify correct specifications. To address these issues, we propose SLD-Spec, an LLM-based specification generation method that combines program slicing and logical deletion. Specifically, SLD-Spec augments the conventional specification generation framework with two key stages: (1) a program slicing stage that decomposes the target function into several smaller code slices, enabling LLMs to focus on more localized semantic structures and thereby improving specification relevance and completeness; and (2) a logical deletion stage that leverages LLMs to perform logical reasoning and filtering over candidate specifications so as to retain logically correct ones. Experimental results show that SLD-Spec consistently outperforms existing methods on datasets containing programs of varying complexity, verifying more programs and generating specifications that are more relevant and more complete. Further ablation studies indicate that program slicing mainly improves specification relevance and completeness, whereas logical deletion plays a key role in increasing verification success rates.</summary>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-09-12T01:40:27Z</published>
+    <arxiv:primary_category term="cs.SE"/>
+    <author>
+      <name>Zehan Chen</name>
+    </author>
+    <author>
+      <name>Long Zhang</name>
+    </author>
+    <author>
+      <name>Zhiwei Zhang</name>
+    </author>
+    <author>
+      <name>JingJing Zhang</name>
+    </author>
+    <author>
+      <name>Ruoyu Zhou</name>
+    </author>
+    <author>
+      <name>Yulong Shen</name>
+    </author>
+    <author>
+      <name>JianFeng Ma</name>
+    </author>
+    <author>
+      <name>Lin Yang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2509.22908v1</id>
+    <title>A benchmark for vericoding: formally verified program synthesis</title>
+    <updated>2025-09-26T20:36:20Z</updated>
+    <link href="https://arxiv.org/abs/2509.22908v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2509.22908v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We present and test the largest benchmark for vericoding, LLM-generation of formally verified code from formal specifications - in contrast to vibe coding, which generates potentially buggy code from a natural language description. Our benchmark contains 12,504 formal specifications, with 3,029 in Dafny, 2,334 in Verus/Rust and 7,141 in Lean. Of these, 6,174 are new unseen problems. We find vericoding success rates of 27% in Lean, 44% in Verus/Rust and 82% in Dafny using off-the-shelf LLMs. Adding natural-language descriptions does not significantly improve performance. We also find that LLM progress has improved progress on pure Dafny verification from 68% to 96% over the past year. The benchmark and vericoding results are shared at https://github.com/Beneficial-AI-Foundation/vericoding-benchmark</summary>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.PL" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-09-26T20:36:20Z</published>
+    <arxiv:comment>25 pages, 1 figure; data available at https://github.com/Beneficial-AI-Foundation/vericoding-benchmark</arxiv:comment>
+    <arxiv:primary_category term="cs.SE"/>
+    <author>
+      <name>Sergiu Bursuc</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Theodore Ehrenborg</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Shaowei Lin</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Lacramioara Astefanoaei</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Ionel Emilian Chiosa</name>
+      <arxiv:affiliation>MIT</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Jure Kukovec</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Alok Singh</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Oliver Butterley</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Adem Bizid</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Quinn Dougherty</name>
+      <arxiv:affiliation>BAIF</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Miranda Zhao</name>
+      <arxiv:affiliation>MIT</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Max Tan</name>
+      <arxiv:affiliation>MIT</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Max Tegmark</name>
+      <arxiv:affiliation>MIT</arxiv:affiliation>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2512.17540v2</id>
+    <title>SGCR: A Specification-Grounded Framework for Trustworthy LLM Code Review</title>
+    <updated>2026-01-27T12:43:31Z</updated>
+    <link href="https://arxiv.org/abs/2512.17540v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2512.17540v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Automating code review with Large Language Models (LLMs) shows immense promise, yet practical adoption is hampered by their lack of reliability, context-awareness, and control. To address this, we propose Specification-Grounded Code Review (SGCR), a framework that grounds LLMs in human-authored specifications to produce trustworthy and relevant feedback. SGCR features a novel dual-pathway architecture: an explicit path ensures deterministic compliance with predefined rules derived from these specifications, while an implicit path heuristically discovers and verifies issues beyond those rules. Deployed in a live industrial environment at HiThink Research, SGCR's suggestions achieved a 42% developer adoption rate-a 90.9% relative improvement over a baseline LLM (22%). Our work demonstrates that specification-grounding is a powerful paradigm for bridging the gap between the generative power of LLMs and the rigorous reliability demands of software engineering.</summary>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-12-19T13:02:22Z</published>
+    <arxiv:comment>Accepted at ASE 2025</arxiv:comment>
+    <arxiv:primary_category term="cs.SE"/>
+    <author>
+      <name>Kai Wang</name>
+    </author>
+    <author>
+      <name>Bingcheng Mao</name>
+    </author>
+    <author>
+      <name>Shuai Jia</name>
+    </author>
+    <author>
+      <name>Yujie Ding</name>
+    </author>
+    <author>
+      <name>Dongming Han</name>
+    </author>
+    <author>
+      <name>Tianyi Ma</name>
+    </author>
+    <author>
+      <name>Bin Cao</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2508.12358v1</id>
+    <title>Uncovering Systematic Failures of LLMs in Verifying Code Against Natural Language Specifications</title>
+    <updated>2025-08-17T13:07:26Z</updated>
+    <link href="https://arxiv.org/abs/2508.12358v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2508.12358v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Large language models (LLMs) have become essential tools in software development, widely used for requirements engineering, code generation and review tasks. Software engineers often rely on LLMs to assess whether system code implementation satisfy task requirements, thereby enhancing code robustness and accuracy. However, it remains unclear whether LLMs can reliably determine whether the code complies fully with the given task descriptions, which is usually natural language specifications. In this paper, we uncover a systematic failure of LLMs in evaluating whether code aligns with natural language requirements. Specifically, with widely used benchmarks, we employ unified prompts to judge code correctness. Our results reveal that LLMs frequently misclassify correct code implementations as either ``not satisfying requirements'' or containing potential defects. Surprisingly, more complex prompting, especially when leveraging prompt engineering techniques involving explanations and proposed corrections, leads to higher misjudgment rate, which highlights the critical reliability issues in using LLMs as code review assistants. We further analyze the root causes of these misjudgments, and propose two improved prompting strategies for mitigation. For the first time, our findings reveals unrecognized limitations in LLMs to match code with requirements. We also offer novel insights and practical guidance for effective use of LLMs in automated code review and task-oriented agent scenarios.</summary>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-08-17T13:07:26Z</published>
+    <arxiv:comment>Accepted to the NIER track of the 40th IEEE/ACM International Conference on Automated Software Engineering (ASE 2025)</arxiv:comment>
+    <arxiv:primary_category term="cs.SE"/>
+    <author>
+      <name>Haolin Jin</name>
+    </author>
+    <author>
+      <name>Huaming Chen</name>
+    </author>
+  </entry>
+</feed>

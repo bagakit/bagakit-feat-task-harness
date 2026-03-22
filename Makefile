@@ -5,7 +5,7 @@ PACKAGE := dist/$(SKILL_NAME).skill
 AGENT_CLI ?= bagakit-agent
 AGENT_FLAGS ?=
 
-.PHONY: install-skill package-skill clean test agent-locale
+.PHONY: install-skill package-skill clean test test-preflight smoke-test agent-locale
 
 install-skill:
 	rm -rf "$(SKILL_DIR)"
@@ -20,8 +20,20 @@ package-skill: clean
 	zip -r "$(PACKAGE)" SKILL.md SKILL_PAYLOAD.json README.md agents references scripts >/dev/null
 	@echo "packaged: $(PACKAGE)"
 
-test:
+test: test-preflight
 	./scripts_dev/test.sh
+
+test-preflight:
+	@command -v python3 >/dev/null 2>&1 || { echo "missing: python3"; exit 1; }
+	@command -v bash >/dev/null 2>&1 || { echo "missing: bash"; exit 1; }
+	@command -v git >/dev/null 2>&1 || { echo "missing: git"; exit 1; }
+	@command -v ruff >/dev/null 2>&1 || { echo "missing: ruff (install with 'brew install ruff' or 'python3 -m pip install --user ruff')"; exit 1; }
+	@echo "ok: preflight"
+
+smoke-test:
+	python3 -m py_compile scripts/*.py
+	bash -n scripts/*.sh scripts_dev/test.sh
+	@echo "ok: smoke-test"
 
 clean:
 	rm -rf dist
